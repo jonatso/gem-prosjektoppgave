@@ -45,29 +45,30 @@
 #include "mem/port.hh"
 #include "params/AddrMapper.hh"
 #include "params/RangeAddrMapper.hh"
+#include "params/MatrixAddrMapper.hh"
 #include "sim/sim_object.hh"
 
 namespace gem5
 {
 
-/**
- * An address mapper changes the packet addresses in going from the
- * response port side of the mapper to the request port side. When the
- * response port is queried for the address ranges, it also performs the
- * necessary range updates. Note that snoop requests that travel from
- * the request port (i.e. the memory side) to the response port are
- * currently not modified.
- */
+  /**
+   * An address mapper changes the packet addresses in going from the
+   * response port side of the mapper to the request port side. When the
+   * response port is queried for the address ranges, it also performs the
+   * necessary range updates. Note that snoop requests that travel from
+   * the request port (i.e. the memory side) to the response port are
+   * currently not modified.
+   */
 
-class AddrMapper : public SimObject
-{
+  class AddrMapper : public SimObject
+  {
   public:
     AddrMapper(const AddrMapperParams &params);
 
     virtual ~AddrMapper() = default;
 
     Port &getPort(const std::string &if_name,
-                  PortID idx=InvalidPortID) override;
+                  PortID idx = InvalidPortID) override;
 
     void init() override;
 
@@ -98,75 +99,76 @@ class AddrMapper : public SimObject
     class AddrMapperSenderState : public Packet::SenderState
     {
 
-      public:
+    public:
+      /**
+       * Construct a new sender state to remember the original address.
+       *
+       * @param _origAddr Address before remapping
+       */
+      AddrMapperSenderState(Addr _origAddr) : origAddr(_origAddr)
+      {
+      }
 
-        /**
-         * Construct a new sender state to remember the original address.
-         *
-         * @param _origAddr Address before remapping
-         */
-        AddrMapperSenderState(Addr _origAddr) : origAddr(_origAddr)
-        {}
+      /** Destructor */
+      ~AddrMapperSenderState() {}
 
-        /** Destructor */
-        ~AddrMapperSenderState() {}
-
-        /** The original address the packet was destined for */
-        Addr origAddr;
+      /** The original address the packet was destined for */
+      Addr origAddr;
     };
 
     class MapperRequestPort : public RequestPort
     {
-      public:
-        MapperRequestPort(const std::string& _name, AddrMapper& _mapper)
-            : RequestPort(_name), mapper(_mapper)
-        { }
+    public:
+      MapperRequestPort(const std::string &_name, AddrMapper &_mapper)
+          : RequestPort(_name), mapper(_mapper)
+      {
+      }
 
-      protected:
-        void
-        recvFunctionalSnoop(PacketPtr pkt) override
-        {
-            mapper.recvFunctionalSnoop(pkt);
-        }
+    protected:
+      void
+      recvFunctionalSnoop(PacketPtr pkt) override
+      {
+        mapper.recvFunctionalSnoop(pkt);
+      }
 
-        Tick
-        recvAtomicSnoop(PacketPtr pkt) override
-        {
-            return mapper.recvAtomicSnoop(pkt);
-        }
+      Tick
+      recvAtomicSnoop(PacketPtr pkt) override
+      {
+        return mapper.recvAtomicSnoop(pkt);
+      }
 
-        bool
-        recvTimingResp(PacketPtr pkt) override
-        {
-            return mapper.recvTimingResp(pkt);
-        }
+      bool
+      recvTimingResp(PacketPtr pkt) override
+      {
+        return mapper.recvTimingResp(pkt);
+      }
 
-        void
-        recvTimingSnoopReq(PacketPtr pkt) override
-        {
-            mapper.recvTimingSnoopReq(pkt);
-        }
+      void
+      recvTimingSnoopReq(PacketPtr pkt) override
+      {
+        mapper.recvTimingSnoopReq(pkt);
+      }
 
-        void
-        recvRangeChange() override
-        {
-            mapper.recvRangeChange();
-        }
+      void
+      recvRangeChange() override
+      {
+        mapper.recvRangeChange();
+      }
 
-        bool
-        isSnooping() const override
-        {
-            return mapper.isSnooping();
-        }
+      bool
+      isSnooping() const override
+      {
+        return mapper.isSnooping();
+      }
 
-        void
-        recvReqRetry() override
-        {
-            mapper.recvReqRetry();
-        }
+      void
+      recvReqRetry() override
+      {
+        mapper.recvReqRetry();
+      }
 
-      private:
-        AddrMapper& mapper;
+    private:
+      AddrMapper &mapper;
     };
 
     /** Instance of request port, facing the memory side */
@@ -174,62 +176,63 @@ class AddrMapper : public SimObject
 
     class MapperResponsePort : public ResponsePort
     {
-      public:
-        MapperResponsePort(const std::string& _name, AddrMapper& _mapper)
-            : ResponsePort(_name), mapper(_mapper)
-        {}
+    public:
+      MapperResponsePort(const std::string &_name, AddrMapper &_mapper)
+          : ResponsePort(_name), mapper(_mapper)
+      {
+      }
 
-      protected:
-        void
-        recvFunctional(PacketPtr pkt) override
-        {
-            mapper.recvFunctional(pkt);
-        }
+    protected:
+      void
+      recvFunctional(PacketPtr pkt) override
+      {
+        mapper.recvFunctional(pkt);
+      }
 
-        void recvMemBackdoorReq(const MemBackdoorReq &req,
-                                MemBackdoorPtr &backdoor) override
-        {
-            mapper.recvMemBackdoorReq(req, backdoor);
-        }
+      void recvMemBackdoorReq(const MemBackdoorReq &req,
+                              MemBackdoorPtr &backdoor) override
+      {
+        mapper.recvMemBackdoorReq(req, backdoor);
+      }
 
-        Tick
-        recvAtomic(PacketPtr pkt) override
-        {
-            return mapper.recvAtomic(pkt);
-        }
+      Tick
+      recvAtomic(PacketPtr pkt) override
+      {
+        return mapper.recvAtomic(pkt);
+      }
 
-        Tick
-        recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr& backdoor) override
-        {
-            return mapper.recvAtomicBackdoor(pkt, backdoor);
-        }
+      Tick
+      recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &backdoor) override
+      {
+        return mapper.recvAtomicBackdoor(pkt, backdoor);
+      }
 
-        bool
-        recvTimingReq(PacketPtr pkt) override
-        {
-            return mapper.recvTimingReq(pkt);
-        }
+      bool
+      recvTimingReq(PacketPtr pkt) override
+      {
+        return mapper.recvTimingReq(pkt);
+      }
 
-        bool
-        recvTimingSnoopResp(PacketPtr pkt) override
-        {
-            return mapper.recvTimingSnoopResp(pkt);
-        }
+      bool
+      recvTimingSnoopResp(PacketPtr pkt) override
+      {
+        return mapper.recvTimingSnoopResp(pkt);
+      }
 
-        AddrRangeList
-        getAddrRanges() const override
-        {
-            return mapper.getAddrRanges();
-        }
+      AddrRangeList
+      getAddrRanges() const override
+      {
+        return mapper.getAddrRanges();
+      }
 
-        void
-        recvRespRetry() override
-        {
-            mapper.recvRespRetry();
-        }
+      void
+      recvRespRetry() override
+      {
+        mapper.recvRespRetry();
+      }
 
-      private:
-        AddrMapper& mapper;
+    private:
+      AddrMapper &mapper;
     };
 
     /** Instance of response port, i.e. on the CPU side */
@@ -246,7 +249,7 @@ class AddrMapper : public SimObject
 
     Tick recvAtomicSnoop(PacketPtr pkt);
 
-    Tick recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr& backdoor);
+    Tick recvAtomicBackdoor(PacketPtr pkt, MemBackdoorPtr &backdoor);
 
     bool recvTimingReq(PacketPtr pkt);
 
@@ -265,16 +268,16 @@ class AddrMapper : public SimObject
     void recvRespRetry();
 
     virtual void recvRangeChange();
-};
+  };
 
-/**
- * Range address mapper that maps a set of original ranges to a set of
- * remapped ranges, where a specific range is of the same size
- * (original and remapped), only with an offset. It's useful for cases
- * where memory is mapped to two different locations
- */
-class RangeAddrMapper : public AddrMapper
-{
+  /**
+   * Range address mapper that maps a set of original ranges to a set of
+   * remapped ranges, where a specific range is of the same size
+   * (original and remapped), only with an offset. It's useful for cases
+   * where memory is mapped to two different locations
+   */
+  class RangeAddrMapper : public AddrMapper
+  {
   public:
     RangeAddrMapper(const RangeAddrMapperParams &p);
 
@@ -285,8 +288,8 @@ class RangeAddrMapper : public AddrMapper
     void
     init() override
     {
-        AddrMapper::init();
-        cpuSidePort.sendRangeChange();
+      AddrMapper::init();
+      cpuSidePort.sendRangeChange();
     }
 
   protected:
@@ -311,13 +314,27 @@ class RangeAddrMapper : public AddrMapper
     void
     recvRangeChange() override
     {
-        // TODO Check that our peer is actually expecting to receive accesses
-        // in our output range(s).
+      // TODO Check that our peer is actually expecting to receive accesses
+      // in our output range(s).
     }
 
   private:
     BackdoorManager backdoorManager;
-};
+  };
+
+  class MatrixAddrMapper : public AddrMapper
+  {
+  private:
+    // The binary invertible matrix (BIM) represented as a vector of rows.
+    // Each row is an N-bit integer.
+    std::vector<uint64_t> bim;
+    int N; // The size of the address (number of bits)
+
+  public:
+    MatrixAddrMapper(const MatrixAddrMapperParams &p);
+    virtual Addr remapAddr(Addr addr) const override;
+    virtual AddrRangeList getAddrRanges() const override;
+  };
 
 } // namespace gem5
 

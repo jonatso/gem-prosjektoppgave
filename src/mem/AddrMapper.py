@@ -83,3 +83,22 @@ class RangeAddrMapper(AddrMapper):
     remapped_ranges = VectorParam.AddrRange(
         "Ranges of memory that are being mapped to"
     )
+
+
+def generate_identity_matrix(size):
+    """Generate an identity matrix of the given size as a list of unsigned integers."""
+    return [(1 << i) for i in range(size)]
+
+
+class MatrixAddrMapper(AddrMapper):
+    type = "MatrixAddrMapper"
+    cxx_class = "gem5::MatrixAddrMapper"
+    cxx_header = "mem/addr_mapper.hh"
+
+    # The binary invertible matrix as a list of unsigned integers.
+    bim = VectorParam.UInt64(
+        generate_identity_matrix(64), "Binary Invertible Matrix"
+    )
+
+    # The size of the address (number of bits).
+    N = Param.Int(64, "Size of the address (number of bits)")

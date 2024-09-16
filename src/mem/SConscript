@@ -44,7 +44,7 @@ SimObject('CommMonitor.py', sim_objects=['CommMonitor'])
 Source('comm_monitor.cc')
 
 SimObject('AbstractMemory.py', sim_objects=['AbstractMemory'])
-SimObject('AddrMapper.py', sim_objects=['AddrMapper', 'RangeAddrMapper'])
+SimObject('AddrMapper.py', sim_objects=['AddrMapper', 'RangeAddrMapper', "MatrixAddrMapper"])
 SimObject('Bridge.py', sim_objects=['Bridge'])
 SimObject('SysBridge.py', sim_objects=['SysBridge'])
 DebugFlag('SysBridge')
