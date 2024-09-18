@@ -100,5 +100,9 @@ class MatrixAddrMapper(AddrMapper):
         generate_identity_matrix(64), "Binary Invertible Matrix"
     )
 
+    bim_inv = VectorParam.UInt64(
+        generate_identity_matrix(64), "Inverse of the Binary Invertible Matrix"
+    )
+
     # The size of the address (number of bits).
     N = Param.Int(64, "Size of the address (number of bits)")

@@ -324,16 +324,22 @@ namespace gem5
 
   class MatrixAddrMapper : public AddrMapper
   {
-  private:
+  protected:
     // The binary invertible matrix (BIM) represented as a vector of rows.
     // Each row is an N-bit integer.
     std::vector<uint64_t> bim;
+    std::vector<uint64_t> bim_inv;
     int N; // The size of the address (number of bits)
+
+    AddrRangeList getAddrRanges() const override;
+
+    MemBackdoorPtr getRevertedBackdoor(MemBackdoorPtr &backdoor,
+                                       const AddrRange &range) override;
 
   public:
     MatrixAddrMapper(const MatrixAddrMapperParams &p);
-    virtual Addr remapAddr(Addr addr) const override;
-    virtual AddrRangeList getAddrRanges() const override;
+    ~MatrixAddrMapper() = default;
+    Addr remapAddr(Addr addr) const override;
   };
 
 } // namespace gem5

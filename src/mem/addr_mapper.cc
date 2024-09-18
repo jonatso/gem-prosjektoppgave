@@ -289,24 +289,9 @@ namespace gem5
         return ranges;
     }
 
-    // defined in header file
-
-    // class MatrixAddrMapper : public AddrMapper
-    // {
-    // private:
-    //     // The binary invertible matrix (BIM) represented as a vector of rows.
-    //     // Each row is an N-bit integer.
-    //     std::vector<uint64_t> bim;
-    //     int N; // The size of the address (number of bits)
-
-    // public:
-    //     MatrixAddrMapper(const MatrixAddrMapperParams &p);
-    //     virtual Addr remapAddr(Addr addr) const override;
-    //     virtual AddrRangeList getAddrRanges() const override;
-    // };
-
     MatrixAddrMapper::MatrixAddrMapper(const MatrixAddrMapperParams &p)
-        : AddrMapper(p), bim(p.bim.begin(), p.bim.end()), N(p.N)
+        : AddrMapper(p), bim(p.bim.begin(), p.bim.end()),
+          bim_inv(p.bim_inv.begin(), p.bim_inv.end()), N(p.N)
     {
         if (bim.size() != N)
             fatal("MatrixAddrMapper: BIM size does not match N\n");
@@ -347,6 +332,15 @@ namespace gem5
         AddrRangeList ranges;
         ranges.push_back(RangeSize(0, MaxAddr));
         return ranges;
+    }
+
+    MemBackdoorPtr
+    MatrixAddrMapper::getRevertedBackdoor(MemBackdoorPtr &backdoor,
+                                          const AddrRange &range)
+    {
+
+        // TODO: figure out what a backdoor is and how to revert it
+        return backdoor;
     }
 
 } // namespace gem5
