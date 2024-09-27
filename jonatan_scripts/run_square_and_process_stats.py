@@ -9,7 +9,9 @@ def run_gem5():
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
-        "configs/example/gpufs/mi300.py",
+        "configs/example/gpufs/vega10_kvm.py",
+        "--gpu-mmio-trace",
+        "gem5-resources/src/gpu-fs/vega_mmio.log",
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
         "--kernel",
@@ -23,13 +25,31 @@ def run_gem5():
 def extract_gpu_stats(file_path):
     gpu_stats = []
 
+    # Define regex patterns for the desired formats
+    patterns = [
+        re.compile(r"system\.gpu_mem_ctrls.*"),
+        re.compile(r"system\.mem_ctrls[0-1].*"),
+        re.compile(r"system\.mem_ctrls1.*"),
+        re.compile(r"system\.ruby\.network_gpu.*"),
+        re.compile(r"system\.(l1|l2|l3)_tlb.*"),
+        re.compile(r"system\.ruby\.tcp_cntrl[0-9]+\.L1Cache.*"),
+        re.compile(r"system\.ruby\.tcp_cntrl[0-9]+\.L2Cache.*"),
+        re.compile(r"system\.ruby\.cp_cntrl0\.L1D0cache.*"),
+        re.compile(r"system\.ruby\.cp_cntrl0\.L1Icache.*"),
+        re.compile(r"system\.ruby\.cp_cntrl0\.L2cache.*"),
+        re.compile(r"system\.ruby\.dir_cntrl0\.L3CacheMemory.*"),
+        re.compile(r"system\.ruby\.gpu_dir_cntrl0\.L3CacheMemory.*"),
+        re.compile(r"system\.ruby\.tcc_cntrl0\.L2cache.*"),
+        re.compile(r"system\.(l1|l2|l3)_coalescer.*"),
+    ]
+
     # Read and parse the stats file
     with open(file_path) as file:
         for line in file:
-            if (
-                "gpu" in line or "cpu1" in line
-            ):  # cpu1 is the GPU, see system.py line ~108
-                gpu_stats.append(line.strip())
+            for pattern in patterns:
+                if pattern.match(line):
+                    gpu_stats.append(line.strip())
+                    break
 
     return gpu_stats
 

@@ -202,6 +202,10 @@ def makeGpuFSSystem(args):
     gpu_mem_mgr = AMDGPUMemoryManager()
     system.pc.south_bridge.gpu.memory_manager = gpu_mem_mgr
 
+    ### AddrMapper ###
+    # system.gpu_addr_mapper = MatrixAddrMapper()
+    # define in amdgpu.py instead
+
     # CPU data path (SystemHub)
     system_hub = AMDGPUSystemHub()
     shader.system_hub = system_hub

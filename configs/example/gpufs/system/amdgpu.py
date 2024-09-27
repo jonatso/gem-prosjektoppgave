@@ -162,6 +162,12 @@ def createGPU(system, args):
             -1
         ].localDataStore.cuPort
 
+    # ### AddrMapper ###
+    # matrix_mapper = MatrixAddrMapper()
+    # for i in range(args.num_compute_units):
+    #     system.gpu_addr_mapper.cpu_side_port = compute_units[i].memory_port
+    #     system.gpu_addr_mapper.mem_side_port = system.membus.cpu_side_ports  # Or appropriate memory interface
+
     # Attach compute units to GPU
     shader.CUs = compute_units
 
