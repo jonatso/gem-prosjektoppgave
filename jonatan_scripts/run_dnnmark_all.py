@@ -1,35 +1,27 @@
-"""
-make a script that runs all the rodinia benchmarks
-the output should be moved to a folder with a timestamp in jonatan_runs
-the folder should be named m5out_<benchmark>_<timestamp>
-Here is an example of how to run the kmeans benchmark:
-sudo build/VEGA_X86/gem5.opt configs/example/gpufs/hip_rodinia.py --disk-image gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml --kernel gem5-resources/src/x86-ubuntu-gpu-ml/vmlinux-gpu-ml --app kmeans --gpu-mmio-trace gem5-resources/src/gpu-fs/vega_mmio.log
-"""
-
 import argparse
 import datetime
 import os
 import shutil
 import subprocess
 
+from dnnmark_list import BENCHMARKS
 from extract_gpu_stats import extract_gpu_stats
-from rodinia_list import BENCHMARKS
 from variants import VARIANTS
 
 
-def run_gem5(benchmark, overrides):
+def run_gem5(binary, parameters, overrides):
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
-        "configs/example/gpufs/hip_rodinia.py",
+        "configs/example/gpufs/mi300.py",
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
         "--kernel",
         "gem5-resources/src/x86-ubuntu-gpu-ml/vmlinux-gpu-ml",
         "--app",
-        benchmark,
-        "--gpu-mmio-trace",
-        "gem5-resources/src/gpu-fs/vega_mmio.log",
+        "gem5-resources/src/gpu/DNNMark/jonatan_run_dnnmark.sh",
+        "--opts",
+        f"{binary} '{parameters}'",  # passed to the script, which will simply call $1 $2 after setting up the environment
     ] + (overrides if overrides else [])
     subprocess.run(command, check=True)
 
@@ -63,7 +55,7 @@ if __name__ == "__main__":
         VARIANTS = {args.variant: VARIANTS[args.variant]}
 
     for variant, overides in VARIANTS.items():
-        for benchmark in BENCHMARKS:
-            run_gem5(benchmark, overides)
+        for name, (binary, parameters) in BENCHMARKS.items():
+            run_gem5(binary, parameters, overides)
             extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")
-            move_output_files(benchmark, timestamp, variant)
+            move_output_files(name, timestamp, variant)

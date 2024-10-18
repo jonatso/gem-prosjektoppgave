@@ -33,7 +33,11 @@ RUN apt -y update && apt -y upgrade && \
     apt -y install build-essential git m4 scons zlib1g zlib1g-dev \
     libprotobuf-dev protobuf-compiler libprotoc-dev libgoogle-perftools-dev \
     python3-dev python-is-python3 doxygen libboost-all-dev \
-    libhdf5-serial-dev python3-pydot libpng-dev libelf-dev pkg-config
+    libhdf5-serial-dev python3-pydot libpng-dev libelf-dev pkg-config \
+    # add cmake
+    cmake wget gnupg2 rpm \
+    # Requirements for ROCm (got errors about missing glog)
+    mesa-common-dev libgflags-dev libgoogle-glog-dev
 RUN apt -y install wget
 
 # The follow were adapted from instructions at the URL below, accessed 4/12/24:
@@ -62,3 +66,25 @@ RUN apt update
 # This package should be the minimum needed to build and is significantly
 # smaller than the full `rocm` package.
 RUN apt -y install rocm-dev
+
+# Install rocBLAS with apt instead of building from source
+RUN apt update && \
+    apt -y install rocblas
+
+# MIOpen dependencies + MIOpen
+RUN apt -y update && \
+    apt -y install rocm-clang-ocl miopen-hip
+
+# Clone MIOpen repo so that we have the kernel sources available
+RUN git clone -b release/rocm-rel-6.1.4.01 --depth=1 \
+    https://github.com/ROCmSoftwarePlatform/MIOpen.git
+
+
+# RUN apt -y install miopenkernels-gfx942-40
+
+# Install precompiled MIOpen kernels for gfx942 with 40 CUs
+RUN apt update && \
+    apt install -y miopen-hip-gfx942kdb
+
+# set MIOPEN_ROOT to /opt/rocm
+ENV MIOPEN_ROOT=/opt/rocm

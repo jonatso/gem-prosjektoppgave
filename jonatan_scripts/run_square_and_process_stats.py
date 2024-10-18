@@ -9,9 +9,9 @@ def run_gem5():
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
-        "configs/example/gpufs/vega10_kvm.py",
-        "--gpu-mmio-trace",
-        "gem5-resources/src/gpu-fs/vega_mmio.log",
+        "configs/example/gpufs/mi200.py",
+        # "--gpu-mmio-trace",
+        # "gem5-resources/src/gpu-fs/vega_mmio.log",
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
         "--kernel",
@@ -82,14 +82,14 @@ def main():
     # Run gem5 simulation
     run_gem5()
 
-    # Extract stats from stats.txt
-    gpu_stats = extract_gpu_stats("m5out/stats.txt")
+    # # Extract stats from stats.txt
+    # gpu_stats = extract_gpu_stats("m5out/stats.txt")
 
-    # Write extracted stats to a file
-    write_stats(gpu_stats, "m5out/gpu_stats.txt")
+    # # Write extracted stats to a file
+    # write_stats(gpu_stats, "m5out/gpu_stats.txt")
 
-    # Move the output files to a new folder
-    move_output_files()
+    # # Move the output files to a new folder
+    # move_output_files()
 
 
 if __name__ == "__main__":
