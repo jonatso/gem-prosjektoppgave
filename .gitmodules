@@ -1,0 +1,3 @@
+[submodule "gem5-resources"]
+	path = gem5-resources
+	url = https://github.com/jonatso/gem5-resources-prosjektoppgave.git
