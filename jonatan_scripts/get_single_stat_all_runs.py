@@ -1,7 +1,7 @@
 import argparse
 import os
-import re
 
+import matplotlib.pyplot as plt
 from dnnmark_list import BENCHMARKS
 
 
@@ -34,6 +34,28 @@ def get_single_stat_all_runs(benchmark, stat_name, get_average=False):
     return res
 
 
+def plot_stats(stats, benchmark_name, stat_name, get_average):
+    plt.figure()
+    for variant, stat_values in stats.items():
+        if isinstance(stat_values, list):
+            plt.plot(stat_values, label=variant)
+        else:
+            plt.bar(variant, stat_values, label=variant)
+
+    plt.xlabel("Run Index" if not get_average else "Variant")
+    # plt.ylabel(stat_name)
+    plt.title(f"{stat_name} for {benchmark_name}")
+    plt.legend()
+
+    output_dir = f"jonatan_images/{stat_name}"
+    os.makedirs(output_dir, exist_ok=True)
+    filename = os.path.join(
+        output_dir, f"{benchmark_name}{'_average' if get_average else ''}.png"
+    )
+    plt.savefig(filename)
+    plt.close()
+
+
 STAT_NAME = "system.cpu1.shaderActiveTicks"
 
 if __name__ == "__main__":
@@ -59,3 +81,4 @@ if __name__ == "__main__":
         )
         print(f"Stats for {benchmark_name}:")
         print(stats)
+        plot_stats(stats, benchmark_name, args.stat, args.average)
