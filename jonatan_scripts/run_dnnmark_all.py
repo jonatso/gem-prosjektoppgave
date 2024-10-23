@@ -6,7 +6,7 @@ import subprocess
 
 from dnnmark_list import BENCHMARKS
 from extract_gpu_stats import extract_gpu_stats
-from variants import VARIANTS
+from variants import VARIANTS, VARIANT_NAMES, get_variant
 
 
 def run_gem5(binary, parameters, overrides):
@@ -44,17 +44,17 @@ if __name__ == "__main__":
         "--variant",
         default=None,
         help="Variant to run",
-        choices=VARIANTS.keys(),
+        choices=VARIANT_NAMES,
     )
     args = parser.parse_args()
 
     if args.variant:
-        if args.variant not in VARIANTS:
+        if variant := get_variant(args.variant) is None:
             print(f"Variant {args.variant} not found")
             exit(1)
-        VARIANTS = {args.variant: VARIANTS[args.variant]}
+        VARIANTS = [variant]
 
-    for variant, overides in VARIANTS.items():
+    for (variant, overides) in VARIANTS:
         for name, (binary, parameters) in BENCHMARKS.items():
             run_gem5(binary, parameters, overides)
             extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")

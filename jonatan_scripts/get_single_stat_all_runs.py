@@ -2,7 +2,9 @@ import argparse
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 from dnnmark_list import BENCHMARKS
+from variants import VARIANTS
 
 
 def get_single_stat(input_file_path, stat_name):
@@ -16,42 +18,47 @@ def get_single_stat(input_file_path, stat_name):
     return None
 
 
-def get_single_stat_all_runs(benchmark, stat_name, get_average=False):
+def get_single_stat_all_runs(benchmark, stat_name):
     # folder structure: jonatan_runs/<variant>/<benchmark>/<timestamp>/
     # get single stat from the file from all runs for a specific benchmark, and print the result per config
     # save the result in a list, per variant (dict)
     res = {}
-    for variant in os.listdir("jonatan_runs"):
+    stats = {}
+    for (variant, _) in VARIANTS:
         res[variant] = []
         for run in os.listdir(f"jonatan_runs/{variant}/{benchmark}"):
             stats_file = f"jonatan_runs/{variant}/{benchmark}/{run}/stats.txt"
-            res[variant].append(get_single_stat(stats_file, stat_name))
-
-    # get the average of the stats for each variant
-    if get_average:
-        for variant in res:
-            res[variant] = sum(res[variant]) / len(res[variant])
-    return res
-
-
-def plot_stats(stats, benchmark_name, stat_name, get_average):
-    plt.figure()
-    for variant, stat_values in stats.items():
-        if isinstance(stat_values, list):
-            plt.plot(stat_values, label=variant)
+            stat_value = get_single_stat(stats_file, stat_name)
+            if stat_value is not None:
+                res[variant].append(stat_value)
+        if res[variant]:
+            avg = np.mean(res[variant])
+            std = np.std(res[variant])
+            stats[variant] = (avg, std)
         else:
-            plt.bar(variant, stat_values, label=variant)
+            stats[variant] = (None, None)
 
-    plt.xlabel("Run Index" if not get_average else "Variant")
-    # plt.ylabel(stat_name)
+    return stats, len(res[VARIANTS[0][0]])  # number of runs
+
+def plot_stats(stats, benchmark_name, stat_name, num_runs):
+    plt.figure()
+    variants = list(stats.keys())
+    averages = [stats[variant][0] for variant in variants]
+    std_devs = [stats[variant][1] for variant in variants]
+
+    # Generate a list of colors for each variant
+    colors = plt.cm.get_cmap('tab10', len(variants)).colors
+
+    plt.bar(variants, averages, yerr=std_devs, capsize=5, color=colors, label=f"Average of {num_runs} runs")
+
+    plt.xlabel("Variant")
+    plt.ylabel(stat_name)
     plt.title(f"{stat_name} for {benchmark_name}")
     plt.legend()
 
     output_dir = f"jonatan_images/{stat_name}"
     os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(
-        output_dir, f"{benchmark_name}{'_average' if get_average else ''}.png"
-    )
+    filename = os.path.join(output_dir, f"{benchmark_name}.png")
     plt.savefig(filename)
     plt.close()
 
@@ -66,19 +73,12 @@ if __name__ == "__main__":
         default=STAT_NAME,
         help="Stat to get",
     )
-    parser.add_argument(
-        "-a",
-        "--average",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Get the average of the stats",
-    )
     args = parser.parse_args()
 
     for benchmark_name in BENCHMARKS.keys():
-        stats = get_single_stat_all_runs(
-            benchmark_name, args.stat, args.average
+        stats, num_runs = get_single_stat_all_runs(
+            benchmark_name, args.stat
         )
         print(f"Stats for {benchmark_name}:")
         print(stats)
-        plot_stats(stats, benchmark_name, args.stat, args.average)
+        plot_stats(stats, benchmark_name, args.stat, num_runs)
