@@ -47,7 +47,7 @@ def plot_stats(stats, benchmark_name, stat_name, num_runs):
     std_devs = [stats[variant][1] for variant in variants]
 
     # Generate a list of colors for each variant
-    colors = plt.cm.get_cmap('tab10', len(variants)).colors
+    colors = plt.get_cmap('tab10', len(variants)).colors
 
     plt.bar(variants, averages, yerr=std_devs, capsize=5, color=colors, label=f"Average of {num_runs} runs")
 
@@ -58,8 +58,8 @@ def plot_stats(stats, benchmark_name, stat_name, num_runs):
 
     output_dir = f"jonatan_images/{stat_name}"
     os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f"{benchmark_name}.png")
-    plt.savefig(filename)
+    filename = os.path.join(output_dir, f"{benchmark_name}.svg")
+    plt.savefig(filename, format="svg")
     plt.close()
 
 
