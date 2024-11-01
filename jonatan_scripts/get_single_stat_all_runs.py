@@ -24,7 +24,7 @@ def get_single_stat_all_runs(benchmark, stat_name):
     # save the result in a list, per variant (dict)
     res = {}
     stats = {}
-    for (variant, _) in VARIANTS:
+    for variant, _1, _2 in VARIANTS:
         res[variant] = []
         for run in os.listdir(f"jonatan_runs/{variant}/{benchmark}"):
             stats_file = f"jonatan_runs/{variant}/{benchmark}/{run}/stats.txt"
@@ -40,6 +40,7 @@ def get_single_stat_all_runs(benchmark, stat_name):
 
     return stats, len(res[VARIANTS[0][0]])  # number of runs
 
+
 def plot_stats(stats, benchmark_name, stat_name, num_runs):
     plt.figure()
     variants = list(stats.keys())
@@ -47,14 +48,25 @@ def plot_stats(stats, benchmark_name, stat_name, num_runs):
     std_devs = [stats[variant][1] for variant in variants]
 
     # Generate a list of colors for each variant
-    colors = plt.get_cmap('tab10', len(variants)).colors
+    colors = plt.get_cmap("tab10", len(variants)).colors
 
-    plt.bar(variants, averages, yerr=std_devs, capsize=5, color=colors, label=f"Average of {num_runs} runs")
+    plt.bar(
+        variants,
+        averages,
+        yerr=std_devs,
+        capsize=5,
+        color=colors,
+        label=f"Average of {num_runs} runs",
+    )
 
     plt.xlabel("Variant")
     plt.ylabel(stat_name)
     plt.title(f"{stat_name} for {benchmark_name}")
+    plt.xticks(rotation=90)  # Rotate x-axis labels 90 degrees
     plt.legend()
+
+    # Adjust layout to make room for rotated x-axis labels
+    plt.tight_layout()  # Automatically adjusts layout
 
     output_dir = f"jonatan_images/{stat_name}"
     os.makedirs(output_dir, exist_ok=True)
@@ -76,9 +88,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     for benchmark_name in BENCHMARKS.keys():
-        stats, num_runs = get_single_stat_all_runs(
-            benchmark_name, args.stat
-        )
+        stats, num_runs = get_single_stat_all_runs(benchmark_name, args.stat)
         print(f"Stats for {benchmark_name}:")
         print(stats)
         plot_stats(stats, benchmark_name, args.stat, num_runs)

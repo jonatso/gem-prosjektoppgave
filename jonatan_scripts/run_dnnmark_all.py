@@ -6,14 +6,18 @@ import subprocess
 
 from dnnmark_list import BENCHMARKS
 from extract_gpu_stats import extract_gpu_stats
-from variants import VARIANTS, VARIANT_NAMES, get_variant
+from variants import (
+    VARIANT_NAMES,
+    VARIANTS,
+    get_variant,
+)
 
 
-def run_gem5(binary, parameters, overrides):
+def run_gem5(binary, parameters, run_script, overrides):
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
-        "configs/example/gpufs/mi300.py",
+        run_script,
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
         "--kernel",
@@ -35,7 +39,6 @@ def move_output_files(benchmark, timestamp, variant):
 
 
 if __name__ == "__main__":
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     # variants is a dict, key is the variant name, value is a list of overrides
     # add variant as a input argument
     parser = argparse.ArgumentParser()
@@ -49,13 +52,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.variant:
-        if variant := get_variant(args.variant) is None:
+        if (
+            variant := get_variant(args.variant) is None
+        ):  # get whole variant, not only the name
             print(f"Variant {args.variant} not found")
             exit(1)
         VARIANTS = [variant]
 
-    for (variant, overides) in VARIANTS:
-        for name, (binary, parameters) in BENCHMARKS.items():
-            run_gem5(binary, parameters, overides)
-            extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")
-            move_output_files(name, timestamp, variant)
+    for i in range(5):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        for variant, run_script, overides in VARIANTS:
+            for name, (binary, parameters) in BENCHMARKS.items():
+                run_gem5(binary, parameters, run_script, overides)
+                extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")
+                move_output_files(name, timestamp, variant)
