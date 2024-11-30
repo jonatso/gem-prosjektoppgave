@@ -30,8 +30,13 @@ def run_gem5(binary, parameters, run_script, overrides):
     subprocess.run(command, check=True)
 
 
-def move_output_files(benchmark, timestamp, variant):
-    output_folder = f"jonatan_runs/{variant}/{benchmark}/{timestamp}"
+def move_output_files(benchmark, timestamp, variant, path_prefix):
+    if path_prefix:
+        output_folder = (
+            f"jonatan_runs/{path_prefix}/{variant}/{benchmark}/{timestamp}"
+        )
+    else:
+        output_folder = f"jonatan_runs/{variant}/{benchmark}/{timestamp}"
     os.makedirs(output_folder)
     for filename in os.listdir("m5out"):
         shutil.move(os.path.join("m5out", filename), output_folder)
@@ -49,20 +54,46 @@ if __name__ == "__main__":
         help="Variant to run",
         choices=VARIANT_NAMES,
     )
+    parser.add_argument(
+        "-b",
+        "--benchmark",
+        default=None,
+        help="Benchmark to run",
+        choices=BENCHMARKS.keys(),
+    )
+    parser.add_argument(
+        "-p",
+        "--path_prefix",
+        default=None,
+        help="Path prefix for the output folder",
+    )
+    parser.add_argument(
+        "-n",
+        "--num_runs",
+        default=1,
+        type=int,
+        help="Number of runs",
+    )
     args = parser.parse_args()
 
     if args.variant:
         if (
-            variant := get_variant(args.variant) is None
-        ):  # get whole variant, not only the name
+            variant := get_variant(args.variant)
+        ) is None:  # get whole variant, not only the name
             print(f"Variant {args.variant} not found")
             exit(1)
         VARIANTS = [variant]
 
-    for i in range(5):
+    if args.benchmark:
+        if args.benchmark not in BENCHMARKS:
+            print(f"Benchmark {args.benchmark} not found")
+            exit(1)
+        BENCHMARKS = {args.benchmark: BENCHMARKS[args.benchmark]}
+
+    for i in range(args.num_runs):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         for variant, run_script, overides in VARIANTS:
             for name, (binary, parameters) in BENCHMARKS.items():
                 run_gem5(binary, parameters, run_script, overides)
                 extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")
-                move_output_files(name, timestamp, variant)
+                move_output_files(name, timestamp, variant, args.path_prefix)
