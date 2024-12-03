@@ -60,322 +60,335 @@
 namespace gem5
 {
 
-class BaseTLB;
-class GPUCommandProcessor;
-class GPUDispatcher;
+    class BaseTLB;
+    class GPUCommandProcessor;
+    class GPUDispatcher;
 
-static const int LDS_SIZE = 65536;
+    static const int LDS_SIZE = 65536;
 
-// aperture (APE) registers define the base/limit
-// pair for the ATC mapped memory space. currently
-// the only APEs we consider are for GPUVM/LDS/scratch.
-// the APEs are registered with unique values based
-// on a per-device basis
-struct ApertureRegister
-{
-    Addr base;
-    Addr limit;
-};
-
-// Class Shader: This describes a single shader instance. Most
-// configurations will only have a single shader.
-
-class Shader : public ClockedObject
-{
-  private:
-    ApertureRegister _gpuVmApe;
-    ApertureRegister _ldsApe;
-    ApertureRegister _scratchApe;
-    Addr shHiddenPrivateBaseVmid;
-
-    // Hardware regs accessed by getreg/setreg instructions, set by queues
-    std::unordered_map<int, uint32_t> hwRegs;
-
-    // Number of active Cus attached to this shader
-    int _activeCus;
-
-    // Last tick that all CUs attached to this shader were inactive
-    Tick _lastInactiveTick;
-
-    // If a kernel-based exit event was requested, wait for all CUs in the
-    // shader to complete before actually exiting so that stats are updated.
-    bool kernelExitRequested = false;
-
-    // Set to true by the dispatcher if the current kernel is a blit kernel
-    bool blitKernel = false;
-
-    // Number of pending non-instruction invalidates outstanding. The shader
-    // should wait for these to be done to ensure correctness.
-    int num_outstanding_invl2s = 0;
-    std::vector<std::tuple<void *, uint32_t, Addr>> deferred_dispatches;
-
-  public:
-    typedef ShaderParams Params;
-    enum hsail_mode_e {SIMT,VECTOR_SCALAR};
-
-    GPUDispatcher &dispatcher();
-    void sampleLoad(const Tick accessTime);
-    void sampleStore(const Tick accessTime);
-    void sampleInstRoundTrip(std::vector<Tick> roundTripTime);
-    void sampleLineRoundTrip(const std::map<Addr,
-        std::vector<Tick>> &roundTripTime);
-
-    SimpleThread *cpuThread;
-    ThreadContext *gpuTc;
-    BaseCPU *cpuPointer;
-
-    void
-    setHwReg(int regIdx, uint32_t val)
+    // aperture (APE) registers define the base/limit
+    // pair for the ATC mapped memory space. currently
+    // the only APEs we consider are for GPUVM/LDS/scratch.
+    // the APEs are registered with unique values based
+    // on a per-device basis
+    struct ApertureRegister
     {
-        hwRegs[regIdx] = val;
-    }
+        Addr base;
+        Addr limit;
+    };
 
-    uint32_t
-    getHwReg(int regIdx)
+    // Class Shader: This describes a single shader instance. Most
+    // configurations will only have a single shader.
+
+    class Shader : public ClockedObject
     {
-        return hwRegs[regIdx];
-    }
+    private:
+        ApertureRegister _gpuVmApe;
+        ApertureRegister _ldsApe;
+        ApertureRegister _scratchApe;
+        Addr shHiddenPrivateBaseVmid;
 
-    const ApertureRegister&
-    gpuVmApe() const
-    {
-        return _gpuVmApe;
-    }
+        // Hardware regs accessed by getreg/setreg instructions, set by queues
+        std::unordered_map<int, uint32_t> hwRegs;
 
-    const ApertureRegister&
-    ldsApe() const
-    {
-        return _ldsApe;
-    }
+        // Number of active Cus attached to this shader
+        int _activeCus;
 
-    void
-    setLdsApe(Addr base, Addr limit)
-    {
-        _ldsApe.base = base;
-        _ldsApe.limit = limit;
-    }
+        // Last tick that all CUs attached to this shader were inactive
+        Tick _lastInactiveTick;
 
-    const ApertureRegister&
-    scratchApe() const
-    {
-        return _scratchApe;
-    }
+        // Last tick that any CU attached to this shader was active
+        Tick _lastActiveTick;
 
-    void
-    setScratchApe(Addr base, Addr limit)
-    {
-        _scratchApe.base = base;
-        _scratchApe.limit = limit;
-    }
+        // Has the shader been active before? Used to calculate the first active tick
+        bool _hasShaderBeenActive = false;
 
-    bool
-    isGpuVmApe(Addr addr) const
-    {
-        bool is_gpu_vm = addr >= _gpuVmApe.base && addr <= _gpuVmApe.limit;
+        // If a kernel-based exit event was requested, wait for all CUs in the
+        // shader to complete before actually exiting so that stats are updated.
+        bool kernelExitRequested = false;
 
-        return is_gpu_vm;
-    }
+        // Set to true by the dispatcher if the current kernel is a blit kernel
+        bool blitKernel = false;
 
-    bool
-    isLdsApe(Addr addr) const
-    {
-        bool is_lds = addr >= _ldsApe.base && addr <= _ldsApe.limit;
+        // Number of pending non-instruction invalidates outstanding. The shader
+        // should wait for these to be done to ensure correctness.
+        int num_outstanding_invl2s = 0;
+        std::vector<std::tuple<void *, uint32_t, Addr>> deferred_dispatches;
 
-        return is_lds;
-    }
+    public:
+        typedef ShaderParams Params;
+        enum hsail_mode_e
+        {
+            SIMT,
+            VECTOR_SCALAR
+        };
 
-    bool
-    isScratchApe(Addr addr) const
-    {
-        bool is_scratch
-            = addr >= _scratchApe.base && addr <= _scratchApe.limit;
+        GPUDispatcher &dispatcher();
+        void sampleLoad(const Tick accessTime);
+        void sampleStore(const Tick accessTime);
+        void sampleInstRoundTrip(std::vector<Tick> roundTripTime);
+        void sampleLineRoundTrip(const std::map<Addr,
+                                                std::vector<Tick>> &roundTripTime);
 
-        return is_scratch;
-    }
+        SimpleThread *cpuThread;
+        ThreadContext *gpuTc;
+        BaseCPU *cpuPointer;
 
-    Addr
-    getScratchBase()
-    {
-        return _scratchApe.base;
-    }
-
-    Addr
-    getHiddenPrivateBase()
-    {
-        return shHiddenPrivateBaseVmid;
-    }
-
-    void
-    initShHiddenPrivateBase(Addr queueBase, uint32_t offset)
-    {
-        Addr sh_hidden_base_new = queueBase - offset;
-
-        // We are initializing sh_hidden_private_base_vmid from the
-        // amd queue descriptor from the first queue.
-        // The sh_hidden_private_base_vmid is supposed to be same for
-        // all the queues from the same process
-        if (shHiddenPrivateBaseVmid != sh_hidden_base_new) {
-            // Do not panic if shHiddenPrivateBaseVmid == 0,
-            // that is if it is uninitialized. Panic only
-            // if the value is initilized and we get
-            // a differnt base later.
-            panic_if(shHiddenPrivateBaseVmid != 0,
-                     "Currently we support only single process\n");
+        void
+        setHwReg(int regIdx, uint32_t val)
+        {
+            hwRegs[regIdx] = val;
         }
-        shHiddenPrivateBaseVmid = sh_hidden_base_new;
-    }
 
-    RequestorID vramRequestorId();
+        uint32_t
+        getHwReg(int regIdx)
+        {
+            return hwRegs[regIdx];
+        }
 
-    EventFunctionWrapper tickEvent;
+        const ApertureRegister &
+        gpuVmApe() const
+        {
+            return _gpuVmApe;
+        }
 
-    // is this simulation going to be timing mode in the memory?
-    bool timingSim;
-    hsail_mode_e hsail_mode;
+        const ApertureRegister &
+        ldsApe() const
+        {
+            return _ldsApe;
+        }
 
-    // If set, issue acq packet @ kernel launch
-    int impl_kern_launch_acq;
-    // If set, issue rel packet @ kernel end
-    int impl_kern_end_rel;
-    // If set, fetch returns may be coissued with instructions
-    int coissue_return;
-    // If set, always dump all 64 gprs to trace
-    int trace_vgpr_all;
-    // Number of cu units in the shader
-    int n_cu;
-    // Number of wavefront slots per SIMD per CU
-    int n_wf;
-    //Number of cu units per sqc in the shader
-    int n_cu_per_sqc;
+        void
+        setLdsApe(Addr base, Addr limit)
+        {
+            _ldsApe.base = base;
+            _ldsApe.limit = limit;
+        }
 
-    // The size of global memory
-    int globalMemSize;
+        const ApertureRegister &
+        scratchApe() const
+        {
+            return _scratchApe;
+        }
 
-    // Tracks CU that rr dispatcher should attempt scheduling
-    int nextSchedCu;
+        void
+        setScratchApe(Addr base, Addr limit)
+        {
+            _scratchApe.base = base;
+            _scratchApe.limit = limit;
+        }
 
-    // Size of scheduled add queue
-    uint32_t sa_n;
+        bool
+        isGpuVmApe(Addr addr) const
+        {
+            bool is_gpu_vm = addr >= _gpuVmApe.base && addr <= _gpuVmApe.limit;
 
-    // Pointer to value to be increments
-    std::vector<int*> sa_val;
-    // When to do the increment
-    std::vector<uint64_t> sa_when;
-    // Amount to increment by
-    std::vector<int32_t> sa_x;
+            return is_gpu_vm;
+        }
 
-    // List of Compute Units (CU's)
-    std::vector<ComputeUnit*> cuList;
+        bool
+        isLdsApe(Addr addr) const
+        {
+            bool is_lds = addr >= _ldsApe.base && addr <= _ldsApe.limit;
 
-    GPUCommandProcessor &gpuCmdProc;
-    GPUDispatcher &_dispatcher;
-    AMDGPUSystemHub *systemHub;
+            return is_lds;
+        }
 
-    int64_t max_valu_insts;
-    int64_t total_valu_insts;
+        bool
+        isScratchApe(Addr addr) const
+        {
+            bool is_scratch = addr >= _scratchApe.base && addr <= _scratchApe.limit;
 
-    Shader(const Params &p);
-    ~Shader();
-    virtual void init();
+            return is_scratch;
+        }
 
-    // Run shader scheduled adds
-    void execScheduledAdds();
+        Addr
+        getScratchBase()
+        {
+            return _scratchApe.base;
+        }
 
-    // Schedule a 32-bit value to be incremented some time in the future
-    void ScheduleAdd(int *val, Tick when, int x);
-    bool processTimingPacket(PacketPtr pkt);
+        Addr
+        getHiddenPrivateBase()
+        {
+            return shHiddenPrivateBaseVmid;
+        }
 
-    void AccessMem(uint64_t address, void *ptr, uint32_t size, int cu_id,
-                   MemCmd cmd, bool suppress_func_errors);
+        void
+        initShHiddenPrivateBase(Addr queueBase, uint32_t offset)
+        {
+            Addr sh_hidden_base_new = queueBase - offset;
 
-    void ReadMem(uint64_t address, void *ptr, uint32_t sz, int cu_id);
+            // We are initializing sh_hidden_private_base_vmid from the
+            // amd queue descriptor from the first queue.
+            // The sh_hidden_private_base_vmid is supposed to be same for
+            // all the queues from the same process
+            if (shHiddenPrivateBaseVmid != sh_hidden_base_new)
+            {
+                // Do not panic if shHiddenPrivateBaseVmid == 0,
+                // that is if it is uninitialized. Panic only
+                // if the value is initilized and we get
+                // a differnt base later.
+                panic_if(shHiddenPrivateBaseVmid != 0,
+                         "Currently we support only single process\n");
+            }
+            shHiddenPrivateBaseVmid = sh_hidden_base_new;
+        }
 
-    void ReadMem(uint64_t address, void *ptr, uint32_t sz, int cu_id,
-                 bool suppress_func_errors);
+        RequestorID vramRequestorId();
 
-    void WriteMem(uint64_t address, void *ptr, uint32_t sz, int cu_id);
+        EventFunctionWrapper tickEvent;
 
-    void WriteMem(uint64_t address, void *ptr, uint32_t sz, int cu_id,
-                  bool suppress_func_errors);
+        // is this simulation going to be timing mode in the memory?
+        bool timingSim;
+        hsail_mode_e hsail_mode;
 
-    void doFunctionalAccess(const RequestPtr &req, MemCmd cmd, void *data,
-                            bool suppress_func_errors, int cu_id);
+        // If set, issue acq packet @ kernel launch
+        int impl_kern_launch_acq;
+        // If set, issue rel packet @ kernel end
+        int impl_kern_end_rel;
+        // If set, fetch returns may be coissued with instructions
+        int coissue_return;
+        // If set, always dump all 64 gprs to trace
+        int trace_vgpr_all;
+        // Number of cu units in the shader
+        int n_cu;
+        // Number of wavefront slots per SIMD per CU
+        int n_wf;
+        // Number of cu units per sqc in the shader
+        int n_cu_per_sqc;
 
-    void
-    registerCU(int cu_id, ComputeUnit *compute_unit)
-    {
-        cuList[cu_id] = compute_unit;
-    }
+        // The size of global memory
+        int globalMemSize;
 
-    void prepareInvalidate(HSAQueueEntry *task);
-    void prepareFlush(GPUDynInstPtr gpuDynInst);
+        // Tracks CU that rr dispatcher should attempt scheduling
+        int nextSchedCu;
 
-    bool dispatchWorkgroups(HSAQueueEntry *task);
-    Addr mmap(int length);
-    void functionalTLBAccess(PacketPtr pkt, int cu_id, BaseMMU::Mode mode);
-    void updateContext(int cid);
-    void notifyCuSleep();
+        // Size of scheduled add queue
+        uint32_t sa_n;
 
-    void
-    incVectorInstSrcOperand(int num_operands)
-    {
-        stats.vectorInstSrcOperand[num_operands]++;
-    }
+        // Pointer to value to be increments
+        std::vector<int *> sa_val;
+        // When to do the increment
+        std::vector<uint64_t> sa_when;
+        // Amount to increment by
+        std::vector<int32_t> sa_x;
 
-    void
-    incVectorInstDstOperand(int num_operands)
-    {
-        stats.vectorInstDstOperand[num_operands]++;
-    }
+        // List of Compute Units (CU's)
+        std::vector<ComputeUnit *> cuList;
 
-    void
-    requestKernelExitEvent(bool is_blit_kernel)
-    {
-        kernelExitRequested = true;
-        blitKernel = is_blit_kernel;
-    }
+        GPUCommandProcessor &gpuCmdProc;
+        GPUDispatcher &_dispatcher;
+        AMDGPUSystemHub *systemHub;
 
-    void decNumOutstandingInvL2s();
-    void incNumOutstandingInvL2s() { num_outstanding_invl2s++; };
-    int getNumOutstandingInvL2s() const { return num_outstanding_invl2s; };
+        int64_t max_valu_insts;
+        int64_t total_valu_insts;
 
-    void addDeferredDispatch(void *raw_pkt, uint32_t queue_id,
-                             Addr host_pkt_addr);
+        Shader(const Params &p);
+        ~Shader();
+        virtual void init();
 
-  protected:
-    struct ShaderStats : public statistics::Group
-    {
-        ShaderStats(statistics::Group *parent, int wf_size);
+        // Run shader scheduled adds
+        void execScheduledAdds();
 
-        // some stats for measuring latency
-        statistics::Distribution allLatencyDist;
-        statistics::Distribution loadLatencyDist;
-        statistics::Distribution storeLatencyDist;
+        // Schedule a 32-bit value to be incremented some time in the future
+        void ScheduleAdd(int *val, Tick when, int x);
+        bool processTimingPacket(PacketPtr pkt);
 
-        // average ticks from vmem inst initiateAcc to coalescer issue,
-        statistics::Distribution initToCoalesceLatency;
+        void AccessMem(uint64_t address, void *ptr, uint32_t size, int cu_id,
+                       MemCmd cmd, bool suppress_func_errors);
 
-        // average ticks from coalescer issue to coalescer hit callback,
-        statistics::Distribution rubyNetworkLatency;
+        void ReadMem(uint64_t address, void *ptr, uint32_t sz, int cu_id);
 
-        // average ticks from coalescer hit callback to GM pipe enqueue,
-        statistics::Distribution gmEnqueueLatency;
+        void ReadMem(uint64_t address, void *ptr, uint32_t sz, int cu_id,
+                     bool suppress_func_errors);
 
-        // average ticks spent in GM pipe's ordered resp buffer.
-        statistics::Distribution gmToCompleteLatency;
+        void WriteMem(uint64_t address, void *ptr, uint32_t sz, int cu_id);
 
-        // average number of cache blocks requested by vmem inst
-        statistics::Distribution coalsrLineAddresses;
+        void WriteMem(uint64_t address, void *ptr, uint32_t sz, int cu_id,
+                      bool suppress_func_errors);
 
-        // average ticks for cache blocks to main memory for the Nth
-        // cache block generated by a vmem inst.
-        statistics::Distribution *cacheBlockRoundTrip;
+        void doFunctionalAccess(const RequestPtr &req, MemCmd cmd, void *data,
+                                bool suppress_func_errors, int cu_id);
 
-        statistics::Scalar shaderActiveTicks;
-        statistics::Vector vectorInstSrcOperand;
-        statistics::Vector vectorInstDstOperand;
-    } stats;
-};
+        void
+        registerCU(int cu_id, ComputeUnit *compute_unit)
+        {
+            cuList[cu_id] = compute_unit;
+        }
+
+        void prepareInvalidate(HSAQueueEntry *task);
+        void prepareFlush(GPUDynInstPtr gpuDynInst);
+
+        bool dispatchWorkgroups(HSAQueueEntry *task);
+        Addr mmap(int length);
+        void functionalTLBAccess(PacketPtr pkt, int cu_id, BaseMMU::Mode mode);
+        void updateContext(int cid);
+        void notifyCuSleep();
+
+        void
+        incVectorInstSrcOperand(int num_operands)
+        {
+            stats.vectorInstSrcOperand[num_operands]++;
+        }
+
+        void
+        incVectorInstDstOperand(int num_operands)
+        {
+            stats.vectorInstDstOperand[num_operands]++;
+        }
+
+        void
+        requestKernelExitEvent(bool is_blit_kernel)
+        {
+            kernelExitRequested = true;
+            blitKernel = is_blit_kernel;
+        }
+
+        void decNumOutstandingInvL2s();
+        void incNumOutstandingInvL2s() { num_outstanding_invl2s++; };
+        int getNumOutstandingInvL2s() const { return num_outstanding_invl2s; };
+
+        void addDeferredDispatch(void *raw_pkt, uint32_t queue_id,
+                                 Addr host_pkt_addr);
+
+    protected:
+        struct ShaderStats : public statistics::Group
+        {
+            ShaderStats(statistics::Group *parent, int wf_size);
+
+            // some stats for measuring latency
+            statistics::Distribution allLatencyDist;
+            statistics::Distribution loadLatencyDist;
+            statistics::Distribution storeLatencyDist;
+
+            // average ticks from vmem inst initiateAcc to coalescer issue,
+            statistics::Distribution initToCoalesceLatency;
+
+            // average ticks from coalescer issue to coalescer hit callback,
+            statistics::Distribution rubyNetworkLatency;
+
+            // average ticks from coalescer hit callback to GM pipe enqueue,
+            statistics::Distribution gmEnqueueLatency;
+
+            // average ticks spent in GM pipe's ordered resp buffer.
+            statistics::Distribution gmToCompleteLatency;
+
+            // average number of cache blocks requested by vmem inst
+            statistics::Distribution coalsrLineAddresses;
+
+            // average ticks for cache blocks to main memory for the Nth
+            // cache block generated by a vmem inst.
+            statistics::Distribution *cacheBlockRoundTrip;
+
+            // shaderNonActiveTicks: Number of ticks the shader was not active
+            statistics::Scalar shaderNonActiveTicks;
+            statistics::Scalar shaderActiveTicks;
+            statistics::Scalar shaderFirstActiveTick;
+            statistics::Vector vectorInstSrcOperand;
+            statistics::Vector vectorInstDstOperand;
+        } stats;
+    };
 
 } // namespace gem5
 
