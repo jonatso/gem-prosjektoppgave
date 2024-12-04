@@ -64,8 +64,21 @@ FetchStage::init()
 void
 FetchStage::exec()
 {
-    for (int j = 0; j < numVectorALUs; ++j) {
-        _fetchUnit[j].exec();
+    // Reset fetch related stats every cycle
+    bool fetched_any = false;
+
+    for (int i = 0; i < computeUnit.numVectorALUs; ++i) {
+        _fetchUnit[i].exec();
+        // If any fetch unit successfully fetched an instruction
+        if (!_fetchUnit[i].) {
+            fetched_any = true;
+        }
+    }
+
+    // If no units fetched anything and there are active wavefronts,
+    // this indicates a fetch stall
+    if (!fetched_any && computeUnit.activeWaves > 0) {
+        computeUnit.trackPipelineStall(ComputeUnit::PipelineStage::Fetch);
     }
 }
 

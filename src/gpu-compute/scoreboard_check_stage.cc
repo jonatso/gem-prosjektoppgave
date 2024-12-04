@@ -75,6 +75,26 @@ bool
 ScoreboardCheckStage::ready(Wavefront *w, nonrdytype_e *rdyStatus,
                             int *exeResType, int wfSlot)
 {
+    if (w->getStatus() == Wavefront::S_STOPPED ||
+        w->instructionBuffer.empty()) {
+        *rdyStatus = NRDY_IB_EMPTY;
+        return false;
+    }
+
+    GPUDynInstPtr ii = w->instructionBuffer.front();
+    assert(ii);
+
+    // Check for register dependencies
+    if (!computeUnit.vrf[w->simdId]->operandsReady(w, ii)) {
+        *rdyStatus = NRDY_VGPR_NRDY;
+        return false;
+    }
+
+    if (!computeUnit.srf[w->simdId]->operandsReady(w, ii)) {
+        *rdyStatus = NRDY_SGPR_NRDY;
+        return false;
+    }
+
     /**
      * The waitCnt checks have to be done BEFORE checking for Instruction
      * buffer empty condition. Otherwise, it will result into a deadlock if
@@ -272,6 +292,18 @@ ScoreboardCheckStage::exec()
                         curWave->nextInstr()->seqNum(),
                         curWave->nextInstr()->disassemble());
                 toSchedule.markWFReady(curWave, exeResType);
+            } else {
+                // Track dependency stalls based on ready check failure reason
+                switch (rdyStatus) {
+                    case NRDY_VGPR_NRDY:
+                        computeUnit.trackDependencyStall(ComputeUnit::DependencyType::RAW);
+                        break;
+                    case NRDY_SGPR_NRDY:
+                        computeUnit.trackDependencyStall(ComputeUnit::DependencyType::RAW);
+                        break;
+                    default:
+                        break;
+                }
             }
             collectStatistics(rdyStatus);
         }

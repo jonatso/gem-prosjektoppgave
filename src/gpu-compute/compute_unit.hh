@@ -84,6 +84,59 @@ enum TLB_CACHE
     TLB_HIT_CACHE_HIT
 };
 
+class ComputeUnit {
+public:
+    struct ComputeUnitStats; // Forward declaration of the nested struct
+};
+
+// In compute_unit.hh
+class CPIStats : public statistics::Group
+{
+  private:
+    // Reference to parent ComputeUnit's stats to access numInstrExecuted
+    const ComputeUnit::ComputeUnitStats &cuStats;
+
+  public:
+    CPIStats(statistics::Group *parent, const ComputeUnit::ComputeUnitStats &stats);
+
+    // Base execution cycles
+    statistics::Scalar baseExecutionCycles;
+
+    // Memory stall cycles
+    statistics::Scalar globalMemLoadStalls;
+    statistics::Scalar globalMemStoreStalls;
+    statistics::Scalar localMemLoadStalls;
+    statistics::Scalar localMemStoreStalls;
+    statistics::Scalar scalarMemStalls;
+
+    // Resource stall cycles
+    statistics::Scalar aluContentionStalls;
+    statistics::Scalar vrfContentionStalls;
+    statistics::Scalar srfContentionStalls;
+    statistics::Scalar ldsContentionStalls;
+
+    // Pipeline stall cycles
+    statistics::Scalar fetchStallCycles;
+    statistics::Scalar scheduleStallCycles;
+    statistics::Scalar executeStallCycles;
+
+    // Dependency stall cycles
+    statistics::Scalar rawStallCycles;
+    statistics::Scalar warStallCycles;
+    statistics::Scalar wawStallCycles;
+
+    // CPI components
+    statistics::Formula baseCPI;
+    statistics::Formula memoryCPI;
+    statistics::Formula resourceCPI;
+    statistics::Formula pipelineCPI;
+    statistics::Formula dependencyCPI;
+    statistics::Formula totalCPI;
+
+    // Helper function to print CPI stack
+    void printCPIStack();
+};
+
 /**
  * WF barrier slots. This represents the barrier resource for
  * WF-level barriers (i.e., barriers to sync WFs within a WG).
@@ -1179,7 +1232,40 @@ class ComputeUnit : public ClockedObject
         // executing two successive instructions.
         statistics::VectorDistribution instInterleave;
     } stats;
+
+    // Add to class ComputeUnit in compute_unit.hh
+
+// Define enums for tracking different types of stalls
+enum class ResourceType {
+    ALU,
+    VRF,
+    SRF,
+    LDS
 };
+
+enum class DependencyType {
+    RAW,
+    WAR,
+    WAW
+};
+
+enum class PipelineStage {
+    Fetch,
+    Schedule,
+    Execute
+};
+
+// Functions to track different stall types
+void trackMemoryStall(GPUDynInstPtr gpuDynInst);
+void trackResourceStall(ResourceType resource);
+void trackDependencyStall(DependencyType dep);
+void trackPipelineStall(PipelineStage stage);
+
+// Add tracking stats as member
+CPIStats cpiStats;
+};
+
+
 
 } // namespace gem5
 

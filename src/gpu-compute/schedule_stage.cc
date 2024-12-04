@@ -154,7 +154,21 @@ ScheduleStage::exec()
     }
 
     // Iterate everything else
+    bool resourcesAvailable = false;
     for (int j = 0; j < computeUnit.numExeUnits(); ++j) {
+        if (!vectorAluRdy) {
+            computeUnit.trackResourceStall(ComputeUnit::ResourceType::ALU);
+        }
+        if (!scalarMemBusRdy) {
+            computeUnit.trackResourceStall(ComputeUnit::ResourceType::SRF);
+        }
+        if (!glbMemBusRdy) {
+            computeUnit.trackResourceStall(ComputeUnit::ResourceType::VRF);
+        }
+        if (!locMemBusRdy) {
+            computeUnit.trackResourceStall(ComputeUnit::ResourceType::LDS);
+        }
+
         // skip the VMEM resources
         if (j >= firstMemUnit && j <= lastMemUnit) {
             continue;

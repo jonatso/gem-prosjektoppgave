@@ -151,6 +151,8 @@ ExecStage::dumpDispList()
 void
 ExecStage::exec()
 {
+    bool executed_any = false;
+
     initStatistics();
     if (debug::GPUSched) {
         dumpDispList();
@@ -193,6 +195,21 @@ ExecStage::exec()
           default:
             panic("Unknown dispatch status in exec()\n");
         }
+    }
+
+    // If nothing executed but we have ready instructions waiting,
+    // track as execute stall
+    bool has_ready_insts = false;
+    for (int j = 0; j < computeUnit.numExeUnits(); ++j) {
+        if (fromSchedule.dispatchStatus(j) == EXREADY) {
+            has_ready_insts = true;
+            break;
+        }
+    }
+
+       // If nothing executed but we have ready instructions, track as execute stall
+    if (!executed_any && has_ready_insts) {
+        computeUnit.trackPipelineStall(ComputeUnit::PipelineStage::Execute);
     }
 
     collectStatistics(PostExec, 0);

@@ -2308,6 +2308,79 @@ ComputeUnit::LDSPort::recvReqRetry()
     }
 }
 
+void
+ComputeUnit::trackMemoryStall(GPUDynInstPtr gpuDynInst)
+{
+    if (gpuDynInst->isLoad()) {
+        if (gpuDynInst->isGlobalMem()) {
+            cpiStats.globalMemLoadStalls++;
+        } else if (gpuDynInst->isLocalMem()) {
+            cpiStats.localMemLoadStalls++;
+        }
+    } else if (gpuDynInst->isStore()) {
+        if (gpuDynInst->isGlobalMem()) {
+            cpiStats.globalMemStoreStalls++;
+        } else if (gpuDynInst->isLocalMem()) {
+            cpiStats.localMemStoreStalls++;
+        }
+    }
+
+    if (gpuDynInst->isScalar()) {
+        cpiStats.scalarMemStalls++;
+    }
+}
+
+void
+ComputeUnit::trackResourceStall(ResourceType resource)
+{
+    switch(resource) {
+        case ResourceType::ALU:
+            cpiStats.aluContentionStalls++;
+            break;
+        case ResourceType::VRF:
+            cpiStats.vrfContentionStalls++;
+            break;
+        case ResourceType::SRF:
+            cpiStats.srfContentionStalls++;
+            break;
+        case ResourceType::LDS:
+            cpiStats.ldsContentionStalls++;
+            break;
+    }
+}
+
+void
+ComputeUnit::trackDependencyStall(DependencyType dep)
+{
+    switch(dep) {
+        case DependencyType::RAW:
+            cpiStats.rawStallCycles++;
+            break;
+        case DependencyType::WAR:
+            cpiStats.warStallCycles++;
+            break;
+        case DependencyType::WAW:
+            cpiStats.wawStallCycles++;
+            break;
+    }
+}
+
+void
+ComputeUnit::trackPipelineStall(PipelineStage stage)
+{
+    switch(stage) {
+        case PipelineStage::Fetch:
+            cpiStats.fetchStallCycles++;
+            break;
+        case PipelineStage::Schedule:
+            cpiStats.scheduleStallCycles++;
+            break;
+        case PipelineStage::Execute:
+            cpiStats.executeStallCycles++;
+            break;
+    }
+}
+
 ComputeUnit::ComputeUnitStats::ComputeUnitStats(statistics::Group *parent,
     int n_wf)
     : statistics::Group(parent),
@@ -2556,6 +2629,119 @@ ComputeUnit::ComputeUnitStats::ComputeUnitStats(statistics::Group *parent,
 
     numALUInstsExecuted = numInstrExecuted - dynamicGMemInstrCnt -
         dynamicLMemInstrCnt;
+}
+
+/// In compute_unit.cc:
+CPIStats::CPIStats(statistics::Group *parent, const ComputeUnit::ComputeUnitStats &stats)
+    : statistics::Group(parent),
+      cuStats(stats),
+      ADD_STAT(baseExecutionCycles, "Base execution cycles"),
+      ADD_STAT(globalMemLoadStalls, "Stall cycles due to global memory loads"),
+      ADD_STAT(globalMemStoreStalls, "Stall cycles due to global memory stores"),
+      ADD_STAT(localMemLoadStalls, "Stall cycles due to local memory loads"),
+      ADD_STAT(localMemStoreStalls, "Stall cycles due to local memory stores"),
+      ADD_STAT(scalarMemStalls, "Stall cycles due to scalar memory operations"),
+      ADD_STAT(aluContentionStalls, "Stall cycles due to ALU contention"),
+      ADD_STAT(vrfContentionStalls, "Stall cycles due to VRF contention"),
+      ADD_STAT(srfContentionStalls, "Stall cycles due to SRF contention"),
+      ADD_STAT(ldsContentionStalls, "Stall cycles due to LDS contention"),
+      ADD_STAT(fetchStallCycles, "Stall cycles in fetch stage"),
+      ADD_STAT(scheduleStallCycles, "Stall cycles in schedule stage"),
+      ADD_STAT(executeStallCycles, "Stall cycles in execute stage"),
+      ADD_STAT(rawStallCycles, "Stall cycles due to RAW dependencies"),
+      ADD_STAT(warStallCycles, "Stall cycles due to WAR dependencies"),
+      ADD_STAT(wawStallCycles, "Stall cycles due to WAW dependencies")
+{
+    // Calculate CPI components
+    baseCPI = baseExecutionCycles / cuStats.numInstrExecuted;
+
+    memoryCPI = (globalMemLoadStalls + globalMemStoreStalls +
+                 localMemLoadStalls + localMemStoreStalls +
+                 scalarMemStalls) / cuStats.numInstrExecuted;
+
+    resourceCPI = (aluContentionStalls + vrfContentionStalls +
+                  srfContentionStalls + ldsContentionStalls) /
+                  cuStats.numInstrExecuted;
+
+    pipelineCPI = (fetchStallCycles + scheduleStallCycles +
+                   executeStallCycles) / cuStats.numInstrExecuted;
+
+    dependencyCPI = (rawStallCycles + warStallCycles +
+                    wawStallCycles) / cuStats.numInstrExecuted;
+
+    totalCPI = baseCPI + memoryCPI + resourceCPI + pipelineCPI + dependencyCPI;
+}
+
+void
+CPIStats::printCPIStack()
+{
+    DPRINTF(GPUExec, "===== CPI Stack Analysis =====\n");
+    DPRINTF(GPUExec, "Total CPI: %f\n\n", totalCPI);
+
+    DPRINTF(GPUExec, "CPI Breakdown:\n");
+    DPRINTF(GPUExec, "1. Base Execution: %f (%f%%)\n",
+            baseCPI, (baseCPI/totalCPI)*100);
+
+    DPRINTF(GPUExec, "2. Memory Stalls: %f (%f%%)\n",
+            memoryCPI, (memoryCPI/totalCPI)*100);
+    DPRINTF(GPUExec, "   - Global Mem Loads: %f\n",
+            globalMemLoadStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Global Mem Stores: %f\n",
+            globalMemStoreStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Local Mem Loads: %f\n",
+            localMemLoadStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Local Mem Stores: %f\n",
+            localMemStoreStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Scalar Mem: %f\n",
+            scalarMemStalls.value()/cuStats.numInstrExecuted.value());
+
+    DPRINTF(GPUExec, "\n3. Resource Stalls: %f (%f%%)\n",
+            resourceCPI, (resourceCPI/totalCPI)*100);
+    DPRINTF(GPUExec, "   - ALU Contention: %f\n",
+            aluContentionStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - VRF Contention: %f\n",
+            vrfContentionStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - SRF Contention: %f\n",
+            srfContentionStalls.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - LDS Contention: %f\n",
+            ldsContentionStalls.value()/cuStats.numInstrExecuted.value());
+
+    DPRINTF(GPUExec, "\n4. Pipeline Stalls: %f (%f%%)\n",
+            pipelineCPI, (pipelineCPI/totalCPI)*100);
+    DPRINTF(GPUExec, "   - Fetch: %f\n",
+            fetchStallCycles.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Schedule: %f\n",
+            scheduleStallCycles.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - Execute: %f\n",
+            executeStallCycles.value()/cuStats.numInstrExecuted.value());
+
+    DPRINTF(GPUExec, "\n5. Dependency Stalls: %f (%f%%)\n",
+            dependencyCPI, (dependencyCPI/totalCPI)*100);
+    DPRINTF(GPUExec, "   - RAW: %f\n",
+            rawStallCycles.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - WAR: %f\n",
+            warStallCycles.value()/cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "   - WAW: %f\n",
+            wawStallCycles.value()/cuStats.numInstrExecuted.value());
+
+    DPRINTF(GPUExec, "\nDetailed Stats:\n");
+    DPRINTF(GPUExec, "Total Instructions: %d\n",
+            cuStats.numInstrExecuted.value());
+    DPRINTF(GPUExec, "Total Base Cycles: %d\n",
+            baseExecutionCycles.value());
+    DPRINTF(GPUExec, "Total Memory Stall Cycles: %d\n",
+            globalMemLoadStalls.value() + globalMemStoreStalls.value() +
+            localMemLoadStalls.value() + localMemStoreStalls.value() +
+            scalarMemStalls.value());
+    DPRINTF(GPUExec, "Total Resource Stall Cycles: %d\n",
+            aluContentionStalls.value() + vrfContentionStalls.value() +
+            srfContentionStalls.value() + ldsContentionStalls.value());
+    DPRINTF(GPUExec, "Total Pipeline Stall Cycles: %d\n",
+            fetchStallCycles.value() + scheduleStallCycles.value() +
+            executeStallCycles.value());
+    DPRINTF(GPUExec, "Total Dependency Stall Cycles: %d\n",
+            rawStallCycles.value() + warStallCycles.value() +
+            wawStallCycles.value());
 }
 
 } // namespace gem5
