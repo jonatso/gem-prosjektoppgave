@@ -46,6 +46,7 @@
 #include "debug/GPURename.hh"
 #include "debug/GPUSync.hh"
 #include "debug/GPUTLB.hh"
+#include "debug/JonatanDebug.hh"
 #include "gpu-compute/dispatcher.hh"
 #include "gpu-compute/gpu_command_processor.hh"
 #include "gpu-compute/gpu_dyn_inst.hh"
@@ -655,6 +656,9 @@ ComputeUnit::hasDispResources(HSAQueueEntry *task, int &num_wfs_in_wg)
     DPRINTF(GPUDisp, "Free WF slots =  %d, Mapped WFs = %d, \
             VGPR Availability = %d, SGPR Availability = %d\n",
             freeWfSlots, numMappedWfs, vregAvail, sregAvail);
+    // DPRINTF(JonatanDebug, "Free WF slots =  %d, Mapped WFs = %d, \
+    //         VGPR Availability = %d, SGPR Availability = %d\n",
+    //         freeWfSlots, numMappedWfs, vregAvail, sregAvail);
 
     if (!vregAvail) {
         ++stats.numTimesWgBlockedDueVgprAlloc;
@@ -786,6 +790,7 @@ ComputeUnit::exec()
         schedule(tickEvent, nextCycle());
     } else {
         shader->notifyCuSleep();
+        stats.numCuSleeps++;
         DPRINTF(GPUDisp, "CU%d: Going to sleep\n", cu_id);
     }
 }
@@ -2464,6 +2469,8 @@ ComputeUnit::ComputeUnitStats::ComputeUnitStats(statistics::Group *parent,
       ADD_STAT(numVecOpsExecutedTwoOpFP,
                "number of two op FP vec ops executed (e.g. WF size/inst)"),
       ADD_STAT(totalCycles, "number of cycles the CU ran for"),
+      ADD_STAT(numCuSleeps,
+               "Number of times this CU was put to sleep"),
       ADD_STAT(vpc, "Vector Operations per cycle (this CU only)"),
       ADD_STAT(vpc_f16, "F16 Vector Operations per cycle (this CU only)"),
       ADD_STAT(vpc_f32, "F32 Vector Operations per cycle (this CU only)"),

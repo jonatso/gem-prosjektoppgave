@@ -41,6 +41,7 @@
 #include "debug/GPUMem.hh"
 #include "debug/GPUShader.hh"
 #include "debug/GPUWgLatency.hh"
+#include "debug/JonatanDebug.hh"
 #include "dev/amdgpu/hwreg_defines.hh"
 #include "gpu-compute/dispatcher.hh"
 #include "gpu-compute/gpu_command_processor.hh"
@@ -290,6 +291,8 @@ namespace gem5
                         curCu, task->globalWgId());
                 DPRINTF(GPUAgentDisp, "Dispatching a workgroup to CU %d: WG %d\n",
                         curCu, task->globalWgId());
+                DPRINTF(JonatanDebug, "Dispatching a workgroup to CU %d: WG %d. Active waves %d\n",
+                        curCu, task->globalWgId(), cuList[curCu]->activeWaves);
                 DPRINTF(GPUWgLatency, "WG Begin cycle:%d wg:%d cu:%d\n",
                         curTick(), task->globalWgId(), curCu);
 
@@ -314,6 +317,7 @@ namespace gem5
                         }
                     }
                     _activeCus++;
+                    DPRINTF(JonatanDebug, "CU våkner opp, antall aktive CUs: %d\n", _activeCus);
                 }
 
                 panic_if(_activeCus <= 0 || _activeCus > cuList.size(),
@@ -593,6 +597,7 @@ namespace gem5
         panic_if(_activeCus <= 0 || _activeCus > cuList.size(),
                  "Invalid activeCu size\n");
         _activeCus--;
+        DPRINTF(JonatanDebug, "CU sovner, antall aktive CUs: %d\n", _activeCus);
         if (!_activeCus)
         {
             stats.shaderActiveTicks += curTick() - _lastInactiveTick;

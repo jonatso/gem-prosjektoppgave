@@ -1150,6 +1150,8 @@ class ComputeUnit : public ClockedObject
         statistics::Scalar numVecOpsExecutedTwoOpFP;
         // Total cycles that something is running on the GPU
         statistics::Scalar totalCycles;
+
+        statistics::Scalar numCuSleeps;
         statistics::Formula vpc; // vector ops per cycle
         statistics::Formula vpc_f16; // vector ops per cycle
         statistics::Formula vpc_f32; // vector ops per cycle
