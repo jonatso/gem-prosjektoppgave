@@ -5,7 +5,6 @@ import shutil
 import subprocess
 
 from dnnmark_list import BENCHMARKS
-from extract_gpu_stats import extract_gpu_stats
 from variants import (
     VARIANT_NAMES,
     VARIANTS,
@@ -13,10 +12,11 @@ from variants import (
 )
 
 
-def run_gem5(binary, parameters, run_script, overrides):
+def run_gem5(binary, parameters, run_script, overrides, debug_flags=None):
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
+        f"--debug-flags={debug_flags}" if debug_flags else "",
         run_script,
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
@@ -74,6 +74,12 @@ if __name__ == "__main__":
         type=int,
         help="Number of runs",
     )
+    parser.add_argument(
+        "-d",
+        "--debug-flags",
+        default=None,
+        help="Debug flags",
+    )
     args = parser.parse_args()
 
     if args.variant:
@@ -94,6 +100,5 @@ if __name__ == "__main__":
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         for variant, run_script, overides in VARIANTS:
             for name, (binary, parameters) in BENCHMARKS.items():
-                run_gem5(binary, parameters, run_script, overides)
-                extract_gpu_stats("m5out/stats.txt", "m5out/gpu_stats.txt")
+                run_gem5(binary, parameters, run_script, overides, args.debug_flags)
                 move_output_files(name, timestamp, variant, args.path_prefix)
