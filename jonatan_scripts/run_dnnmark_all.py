@@ -11,8 +11,21 @@ from variants import (
     get_variant,
 )
 
+GEM5_OUTPUT_DIR = "m5out"
+MY_OUTPUT_DIR = "jonatan_runs"
 
-def run_gem5(binary, parameters, run_script, overrides, debug_flags=None):
+
+def run_gem5(
+    binary,
+    parameters,
+    run_script,
+    overrides,
+    debug_flags=None,
+    terminal_output_file="terminal_output.txt",
+):
+    if not os.path.exists(GEM5_OUTPUT_DIR):
+        os.makedirs(GEM5_OUTPUT_DIR)
+    f = open(f"{GEM5_OUTPUT_DIR}/{terminal_output_file}", "w")
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
@@ -27,20 +40,20 @@ def run_gem5(binary, parameters, run_script, overrides, debug_flags=None):
         "--opts",
         f"{binary} '{parameters}'",  # passed to the script, which will simply call $1 $2 after setting up the environment
     ] + (overrides if overrides else [])
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, stdout=f)
 
 
 def move_output_files(benchmark, timestamp, variant, path_prefix):
     if path_prefix:
         output_folder = (
-            f"jonatan_runs/{path_prefix}/{variant}/{benchmark}/{timestamp}"
+            f"{MY_OUTPUT_DIR}/{path_prefix}/{variant}/{benchmark}/{timestamp}"
         )
     else:
-        output_folder = f"jonatan_runs/{variant}/{benchmark}/{timestamp}"
+        output_folder = f"{MY_OUTPUT_DIR}/{variant}/{benchmark}/{timestamp}"
     os.makedirs(output_folder)
-    for filename in os.listdir("m5out"):
-        shutil.move(os.path.join("m5out", filename), output_folder)
-    os.rmdir("m5out")
+    for filename in os.listdir(GEM5_OUTPUT_DIR):
+        shutil.move(os.path.join(GEM5_OUTPUT_DIR, filename), output_folder)
+    os.rmdir(GEM5_OUTPUT_DIR)
 
 
 if __name__ == "__main__":
@@ -100,5 +113,7 @@ if __name__ == "__main__":
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         for variant, run_script, overides in VARIANTS:
             for name, (binary, parameters) in BENCHMARKS.items():
-                run_gem5(binary, parameters, run_script, overides, args.debug_flags)
+                run_gem5(
+                    binary, parameters, run_script, overides, args.debug_flags
+                )
                 move_output_files(name, timestamp, variant, args.path_prefix)
