@@ -317,7 +317,7 @@ namespace gem5
                         }
                     }
                     _activeCus++;
-                    DPRINTF(JonatanDebug, "CU våkner opp, antall aktive CUs: %d\n", _activeCus);
+                    DPRINTF(JonatanDebug, "CU %d våkner opp, antall aktive CUs: %d\n", curCu, _activeCus);
                 }
 
                 panic_if(_activeCus <= 0 || _activeCus > cuList.size(),
@@ -591,13 +591,13 @@ namespace gem5
     }
 
     void
-    Shader::notifyCuSleep()
+    Shader::notifyCuSleep(int cu_id)
     {
         // If all CUs attached to his shader are asleep, update shaderActiveTicks
         panic_if(_activeCus <= 0 || _activeCus > cuList.size(),
                  "Invalid activeCu size\n");
         _activeCus--;
-        DPRINTF(JonatanDebug, "CU sovner, antall aktive CUs: %d\n", _activeCus);
+        DPRINTF(JonatanDebug, "CU %d sovner, antall aktive CUs: %d\n", cu_id, _activeCus);
         if (!_activeCus)
         {
             stats.shaderActiveTicks += curTick() - _lastInactiveTick;

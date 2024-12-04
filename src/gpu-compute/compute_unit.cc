@@ -789,7 +789,7 @@ ComputeUnit::exec()
     if (!isDone()) {
         schedule(tickEvent, nextCycle());
     } else {
-        shader->notifyCuSleep();
+        shader->notifyCuSleep(cu_id);
         stats.numCuSleeps++;
         DPRINTF(GPUDisp, "CU%d: Going to sleep\n", cu_id);
     }

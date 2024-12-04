@@ -324,7 +324,7 @@ namespace gem5
         Addr mmap(int length);
         void functionalTLBAccess(PacketPtr pkt, int cu_id, BaseMMU::Mode mode);
         void updateContext(int cid);
-        void notifyCuSleep();
+        void notifyCuSleep(int cu_id);
 
         void
         incVectorInstSrcOperand(int num_operands)
