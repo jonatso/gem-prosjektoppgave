@@ -306,7 +306,7 @@ namespace gem5
                         if (_lastActiveTick)
                         {
 
-                            stats.shaderNonActiveTicks += curTick() - _lastActiveTick;
+                            stats.shaderNonActiveInBetweenTicks += curTick() - _lastActiveTick;
                         }
                         else
                         {
@@ -598,6 +598,8 @@ namespace gem5
             stats.shaderActiveTicks += curTick() - _lastInactiveTick;
             _lastActiveTick = curTick();
 
+            stats.shaderLastActiveTick = curTick();
+
             if (kernelExitRequested)
             {
                 kernelExitRequested = false;
@@ -666,8 +668,10 @@ namespace gem5
                    "Total ticks that any CU attached to this shader is active"),
           ADD_STAT(shaderFirstActiveTick,
                    "First tick that any CU attached to this shader was active"),
-          ADD_STAT(shaderNonActiveTicks,
-                   "Total ticks that all CUs attached to this shader are asleep (Håper dette funker hehe)"),
+          ADD_STAT(shaderLastActiveTick,
+                   "Last tick that any CU attached to this shader was active"),
+          ADD_STAT(shaderNonActiveInBetweenTicks,
+                   "Total ticks that all CUs attached to this shader are not active in between active shader ticks"),
           ADD_STAT(vectorInstSrcOperand,
                    "vector instruction source operand distribution"),
           ADD_STAT(vectorInstDstOperand,
