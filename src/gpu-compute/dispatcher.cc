@@ -37,6 +37,7 @@
 #include "debug/GPUKernelInfo.hh"
 #include "debug/GPUWgLatency.hh"
 #include "debug/JonatanDebug.hh"
+#include "debug/JonatanDebugExtra.hh"
 #include "gpu-compute/gpu_command_processor.hh"
 #include "gpu-compute/hsa_queue_entry.hh"
 #include "gpu-compute/shader.hh"
@@ -208,7 +209,7 @@ GPUDispatcher::exec()
                 launched = true;
                 disp_count++;
                 DPRINTF(GPUKernelInfo, "Launched kernel %d\n", exec_id);
-                DPRINTF(JonatanDebug, "Launched kernel %d\n", exec_id);
+                DPRINTF(JonatanDebugExtra, "Launched kernel %d\n", exec_id);
 
             }
         }
@@ -223,7 +224,7 @@ GPUDispatcher::exec()
 
     while (doneIds.size()) {
         DPRINTF(GPUDisp, "Kernel %d completed\n", doneIds.front());
-        DPRINTF(JonatanDebug, "Kernel %d completed\n", doneIds.front());
+        DPRINTF(JonatanDebugExtra, "Kernel %d completed\n", doneIds.front());
 
         doneIds.pop();
     }

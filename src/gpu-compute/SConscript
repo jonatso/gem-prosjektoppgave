@@ -104,8 +104,10 @@ DebugFlag('GPUWgLatency')
 DebugFlag('Predictor')
 DebugFlag('WavefrontStack')
 DebugFlag('JonatanDebug')
+DebugFlag('JonatanDebugExtra')
 
 CompoundFlag('GPUALL', ['GPUCoalescer', 'GPUDisp', 'GPUExec', 'GPUFetch',
                         'GPUMem', 'GPUPort', 'GPUSched', 'GPUSRF', 'GPUSync',
                         'GPUTLB', 'GPUVRF', 'GPURFC', 'GPUWgLatency',
                         'GPUKernelInfo', 'GPUInitAbi', 'GPULDS'])
+CompoundFlag('JonatanDebugAll', ['JonatanDebug', 'JonatanDebugExtra'])

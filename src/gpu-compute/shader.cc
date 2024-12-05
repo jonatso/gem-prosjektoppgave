@@ -42,6 +42,7 @@
 #include "debug/GPUShader.hh"
 #include "debug/GPUWgLatency.hh"
 #include "debug/JonatanDebug.hh"
+#include "debug/JonatanDebugExtra.hh"
 #include "dev/amdgpu/hwreg_defines.hh"
 #include "gpu-compute/dispatcher.hh"
 #include "gpu-compute/gpu_command_processor.hh"
@@ -291,7 +292,7 @@ namespace gem5
                         curCu, task->globalWgId());
                 DPRINTF(GPUAgentDisp, "Dispatching a workgroup to CU %d: WG %d\n",
                         curCu, task->globalWgId());
-                DPRINTF(JonatanDebug, "Dispatching a workgroup to CU %d: WG %d. Active waves %d\n",
+                DPRINTF(JonatanDebugExtra, "Dispatching a workgroup to CU %d: WG %d. Active waves %d\n",
                         curCu, task->globalWgId(), cuList[curCu]->activeWaves);
                 DPRINTF(GPUWgLatency, "WG Begin cycle:%d wg:%d cu:%d\n",
                         curTick(), task->globalWgId(), curCu);
