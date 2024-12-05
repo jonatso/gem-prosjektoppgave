@@ -2,17 +2,30 @@ import os
 
 import numpy as np
 from variants import VARIANTS
+import re
 
 
-def get_single_stat(input_file_path, stat_name):
+def get_single_stat(input_file_path, regex_pattern):
+    pattern = re.compile(regex_pattern)
     with open(input_file_path) as file:
         for line in file:
-            if stat_name in line:
+            if pattern.match(line):
+                parts = line.split()
+                if len(parts) > 1 and parts[1] != "nan":    
+                    return float(parts[1])
+    return None
+
+def get_stat_all_matches_list(input_file_path, stat_pattern):
+    res = []
+    pattern = re.compile(stat_pattern) 
+    with open(input_file_path) as file:
+        for line in file:
+            if pattern.match(line):
                 # Assuming the format is "stat_name value # extra_info"
                 parts = line.split()
                 if len(parts) > 1 and parts[1] != "nan":
-                    return float(parts[1])
-    return None
+                    res.append(float(parts[1]))
+    return res
 
 
 def get_single_stat_all_runs(benchmark, stat_name):

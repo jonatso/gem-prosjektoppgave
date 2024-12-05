@@ -1,30 +1,50 @@
-from get_single_stat import get_single_stat
+import numpy as np
+from get_single_stat import get_single_stat, get_stat_all_matches_list
+
+def print_max_min_avg_std(stat_name, stat_list):
+    print(f"{stat_name}: {sum(stat_list) / len(stat_list):.2f} | max: {max(stat_list):.2f} | min: {min(stat_list):.2f} | std: {np.std(stat_list):.2f} | num: {len(stat_list)}")
+
 
 def print_shader_tick_stats(input_file_path):
-    interesing_stat_names = [
-        "simTicks",
-        "shaderFirstActiveTick",
-        "shaderLastActiveTick",
-        "shaderActiveTicks",
-        "shaderNonActiveInBetweenTicks",
+    interesting_single_stat_names = [
+        r".*simTicks",
+        r".*shaderFirstActiveTick",
+        r".*shaderLastActiveTick",
+        r".*shaderActiveTicks",
+        r".*shaderNonActiveInBetweenTicks",
     ]
 
-    stats = {}
-    for stat_name in interesing_stat_names:
-        stats[stat_name] = get_single_stat(input_file_path, stat_name)
-        print(f"{stat_name}: {stats[stat_name]}")
+    interesting_multi_stat_names = [
+        r".*CUs[0-9]*\.totalCycles",
+        r".*CUs[0-9]*\.numInstrExecuted",
+        r".*CUs[0-9]*\.numCuSleeps",
+        r".*CUs[0-9]*\.wavefronts[0-9]*\.numInstrExecuted",
+    ]
+
+    single_stats = {}
+    for stat_name in interesting_single_stat_names:
+        single_stats[stat_name] = get_single_stat(input_file_path, stat_name)
+        print(f"{stat_name}: {single_stats[stat_name]}")
+
+    multi_stats = {}
+    for stat_name in interesting_multi_stat_names:
+        multi_stats[stat_name] = get_stat_all_matches_list(input_file_path, stat_name)
+        print_max_min_avg_std(stat_name, multi_stats[stat_name])
+
+    
+
 
     print()
     print("Andel av tid som shader er aktiv (i den tiden der arbeider/får nytt arbeid):")
-    print(f"{stats['shaderActiveTicks'] / (stats['shaderActiveTicks'] + stats['shaderNonActiveInBetweenTicks'])} : shaderActiveTicks / (shaderActiveTicks + shaderNonActiveInBetweenTicks)")
+    print(f'{single_stats[r".*shaderActiveTicks"] / (single_stats[r".*shaderActiveTicks"] + single_stats[r".*shaderNonActiveInBetweenTicks"])} : shaderActiveTicks / (shaderActiveTicks + shaderNonActiveInBetweenTicks)')
 
     print()
     print("Andel av tid som shader er aktiv eller venter på nytt arbeid")
-    print(f"{(stats['shaderActiveTicks'] + stats['shaderNonActiveInBetweenTicks']) / stats['simTicks']} : (shaderActiveTicks + shaderNonActiveInBetweenTicks) / simTicks")
+    print(f'{(single_stats[r".*shaderActiveTicks"] + single_stats[r".*shaderNonActiveInBetweenTicks"]) / single_stats[r".*simTicks"]} : (shaderActiveTicks + shaderNonActiveInBetweenTicks) / simTicks')
 
     print()
     print("Andel av tid som shader er aktiv (total):")
-    print(f"{stats['shaderActiveTicks'] / stats['simTicks']} : shaderActiveTicks / simTicks")
+    print(f'{single_stats[r".*shaderActiveTicks"] / single_stats[r".*simTicks"]} : shaderActiveTicks / simTicks')
 
 if __name__ == "__main__":
     import sys
