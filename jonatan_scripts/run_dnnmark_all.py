@@ -21,15 +21,12 @@ def run_gem5(
     run_script,
     overrides,
     debug_flags=None,
-    terminal_output_file="terminal_output.txt",
 ):
-    if not os.path.exists(GEM5_OUTPUT_DIR):
-        os.makedirs(GEM5_OUTPUT_DIR)
-    f = open(f"{GEM5_OUTPUT_DIR}/{terminal_output_file}", "w")
     command = [
         "sudo",
         "build/VEGA_X86/gem5.opt",
         f"--debug-flags={debug_flags}" if debug_flags else "",
+        "--debug-file=debug.out.gz",
         run_script,
         "--disk-image",
         "gem5-resources/src/x86-ubuntu-gpu-ml/disk-image/x86-ubuntu-gpu-ml",
@@ -40,7 +37,7 @@ def run_gem5(
         "--opts",
         f"{binary} '{parameters}'",  # passed to the script, which will simply call $1 $2 after setting up the environment
     ] + (overrides if overrides else [])
-    subprocess.run(command, check=True, stdout=f)
+    subprocess.run(command, check=True)
 
 
 def move_output_files(benchmark, timestamp, variant, path_prefix):
