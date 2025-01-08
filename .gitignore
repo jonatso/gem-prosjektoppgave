@@ -11,6 +11,8 @@ cscope.out
 m5out
 jonatan_runs
 jonatan_images
+jonatan_runs_old
+jonatan_images_old
 /src/doxygen/html
 /ext/dramsim2/DRAMSim2
 /ext/mcpat/regression/*/*.out
