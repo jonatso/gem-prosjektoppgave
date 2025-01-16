@@ -1,20 +1,13 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
 #include <vector>
-#include <cstdlib>
 #include <thread>
-#include <chrono>
+#include <cstdlib>
 
 // Constants
 constexpr int DEFAULT_NUM_FRAMES = 60; // Default number of frames
 constexpr int NUM_VERTICES = 1024;
 constexpr int NUM_FRAGMENTS = 2048;
-
-// Buffers
-float** vertexBuffers;
-float** transformedVertexBuffers;
-float** fragmentBuffers;
-float** frameBuffers;
 
 // Simulate vertex processing (vertex shader)
 __global__ void vertexShader(float* input, float* output, int numVertices) {
@@ -62,64 +55,57 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Processing " << numFrames << " frames." << std::endl;
 
-    // Allocate memory for each frame's buffers
-    vertexBuffers = new float*[numFrames];
-    transformedVertexBuffers = new float*[numFrames];
-    fragmentBuffers = new float*[numFrames];
-    frameBuffers = new float*[numFrames];
-
-    for (int i = 0; i < numFrames; ++i) {
-        checkHIPError(hipMalloc(&vertexBuffers[i], NUM_VERTICES * 3 * sizeof(float)), "Allocating vertex buffer");
-        checkHIPError(hipMalloc(&transformedVertexBuffers[i], NUM_VERTICES * 3 * sizeof(float)), "Allocating transformed vertex buffer");
-        checkHIPError(hipMalloc(&fragmentBuffers[i], NUM_FRAGMENTS * 2 * sizeof(float)), "Allocating fragment buffer");
-        checkHIPError(hipMalloc(&frameBuffers[i], NUM_FRAGMENTS * sizeof(float)), "Allocating frame buffer");
-    }
-
-    // Generate random vertex data for the first frame
+    // Generate random vertex data
     std::vector<float> hostVertexBuffer(NUM_VERTICES * 3);
     for (int i = 0; i < NUM_VERTICES * 3; ++i) {
         hostVertexBuffer[i] = static_cast<float>(rand()) / RAND_MAX;
     }
-    for (int i = 0; i < numFrames; ++i) {
-        checkHIPError(hipMemcpy(vertexBuffers[i], hostVertexBuffer.data(), NUM_VERTICES * 3 * sizeof(float), hipMemcpyHostToDevice), "Copying vertex data");
-    }
 
-    // Create streams for each frame
-    hipStream_t* streams = new hipStream_t[numFrames];
-    for (int i = 0; i < numFrames; ++i) {
-        hipStreamCreate(&streams[i]);
-    }
-
-    // Launch and synchronize pipeline stages dynamically
+    // Launch and process frames dynamically
+    std::vector<std::thread> syncThreads;
     for (int frame = 0; frame < numFrames; ++frame) {
         std::cout << "Launching pipeline for frame " << frame << std::endl;
 
-        // Vertex shader
-        vertexShader<<<(NUM_VERTICES + 255) / 256, 256, 0, streams[frame]>>>(
-            vertexBuffers[frame], transformedVertexBuffers[frame], NUM_VERTICES);
+        // Allocate memory and create a stream for this frame
+        float *vertexBuffer, *transformedVertexBuffer, *fragmentBuffer, *frameBuffer;
+        hipStream_t stream;
+        hipStreamCreate(&stream);
+        checkHIPError(hipMalloc(&vertexBuffer, NUM_VERTICES * 3 * sizeof(float)), "Allocating vertex buffer");
+        checkHIPError(hipMalloc(&transformedVertexBuffer, NUM_VERTICES * 3 * sizeof(float)), "Allocating transformed vertex buffer");
+        checkHIPError(hipMalloc(&fragmentBuffer, NUM_FRAGMENTS * 2 * sizeof(float)), "Allocating fragment buffer");
+        checkHIPError(hipMalloc(&frameBuffer, NUM_FRAGMENTS * sizeof(float)), "Allocating frame buffer");
 
-        // Rasterizer
-        rasterizer<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, streams[frame]>>>(
-            transformedVertexBuffers[frame], fragmentBuffers[frame], NUM_FRAGMENTS);
+        // Copy vertex data to the device
+        checkHIPError(hipMemcpy(vertexBuffer, hostVertexBuffer.data(), NUM_VERTICES * 3 * sizeof(float), hipMemcpyHostToDevice), "Copying vertex data");
 
-        // Fragment shader
-        fragmentShader<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, streams[frame]>>>(
-            fragmentBuffers[frame], frameBuffers[frame], NUM_FRAGMENTS);
+        // Launch pipeline stages
+        vertexShader<<<(NUM_VERTICES + 255) / 256, 256, 0, stream>>>(vertexBuffer, transformedVertexBuffer, NUM_VERTICES);
+        rasterizer<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, stream>>>(transformedVertexBuffer, fragmentBuffer, NUM_FRAGMENTS);
+        fragmentShader<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, stream>>>(fragmentBuffer, frameBuffer, NUM_FRAGMENTS);
 
-        // Use a separate thread to synchronize the frame and log readiness
-        std::thread([frame, &streams]() {
-            hipStreamSynchronize(streams[frame]);
+        // Synchronize, clean up, and destroy the stream in a separate thread
+        syncThreads.emplace_back([frame, vertexBuffer, transformedVertexBuffer, fragmentBuffer, frameBuffer, stream]() {
+            hipStreamSynchronize(stream);
             std::cout << "Frame " << frame << " is ready!" << std::endl;
-        }).detach();
+
+            // Free memory for this frame
+            hipFree(vertexBuffer);
+            hipFree(transformedVertexBuffer);
+            hipFree(fragmentBuffer);
+            hipFree(frameBuffer);
+
+            // Destroy the stream
+            hipStreamDestroy(stream);
+            std::cout << "Stream for frame " << frame << " destroyed." << std::endl;
+        });
     }
 
-    // Cleanup
-    for (int i = 0; i < numFrames; ++i) {
-        std::cout << "Destroying stream for frame " << i << std::endl;
-        hipStreamDestroy(streams[i]);
-        hipFree(vertexBuffers[i]);
-        hipFree(transformedVertexBuffers[i]);
-        hipFree(fragmentBuffers[i]);
-        hipFree(frameBuffers[i]);
+    // Join all synchronization threads
+    for (auto& thread : syncThreads) {
+        thread.join();
     }
+
+    std::cout << "All frames processed." << std::endl;
+
+    return 0;
 }
