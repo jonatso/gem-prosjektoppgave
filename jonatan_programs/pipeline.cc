@@ -1,43 +1,77 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
-#include <thread>
 #include <vector>
-#include <queue>
 #include <cstdlib>
+#include <cmath>
+#include <random>
 #include <mutex>
 #include <condition_variable>
+#include <thread>
 
 // Constants
 constexpr int DEFAULT_NUM_FRAMES = 60; // Default number of frames
 constexpr int NUM_VERTICES = 1024;
+constexpr int NUM_TRIANGLES = NUM_VERTICES / 3;
 constexpr int NUM_FRAGMENTS = 2048;
-constexpr int MAX_CONCURRENT_FRAMES = 10; // Maximum number of frames processed concurrently
+constexpr int TEXTURE_WIDTH = 128;
+constexpr int TEXTURE_HEIGHT = 128;
+constexpr int TILE_SIZE = 64;
+constexpr int MAX_CONCURRENT_FRAMES = 10;
 
-// Simulate vertex processing (vertex shader)
+// Vertex Shader: Simulates transforming vertices
 __global__ void vertexShader(float* input, float* output, int numVertices) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < numVertices) {
-        output[idx * 3 + 0] = input[idx * 3 + 0] * 0.5f + 1.0f;
-        output[idx * 3 + 1] = input[idx * 3 + 1] * 0.5f + 1.0f;
-        output[idx * 3 + 2] = input[idx * 3 + 2] * 0.5f + 1.0f;
+        for (int i = 0; i < 4; ++i) {
+            output[idx * 4 + i] = input[idx * 4 + i] * 1.1f + 0.5f;
+        }
     }
 }
 
-// Simulate rasterization
-__global__ void rasterizer(float* transformedVertices, float* fragments, int numFragments) {
+// Rasterizer: Simulates generating fragments from triangles
+__global__ void rasterizer(float* vertices, float* fragments, int numTriangles) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < numFragments) {
-        fragments[idx * 2 + 0] = transformedVertices[(idx % NUM_VERTICES) * 3 + 0] + 0.1f;
-        fragments[idx * 2 + 1] = transformedVertices[(idx % NUM_VERTICES) * 3 + 1] + 0.1f;
+    if (idx < numTriangles) {
+        int baseIdx = idx * 12; // 3 vertices * 4 floats per vertex
+        float centroidX = 0.0f, centroidY = 0.0f;
+
+        for (int i = 0; i < 3; ++i) {
+            centroidX += vertices[baseIdx + i * 4];
+            centroidY += vertices[baseIdx + i * 4 + 1];
+        }
+        centroidX /= 3.0f;
+        centroidY /= 3.0f;
+
+        fragments[idx * 2] = centroidX;
+        fragments[idx * 2 + 1] = centroidY;
     }
 }
 
-// Simulate fragment shading (fragment shader)
-__global__ void fragmentShader(float* fragments, float* frameBuffer, int numFragments) {
+// Fragment Shader: Simulates texturing and shading
+__global__ void fragmentShader(float* fragments, float* texture, float* framebuffer, int numFragments) {
+    __shared__ float tile[TILE_SIZE * 2];
+
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < numFragments) {
-        float color = fragments[idx * 2 + 0] * 0.8f + fragments[idx * 2 + 1] * 0.6f;
-        frameBuffer[idx] = color;
+        float x = fragments[idx * 2];
+        float y = fragments[idx * 2 + 1];
+
+        int texX = static_cast<int>((x + 1.0f) * 0.5f * (TEXTURE_WIDTH - 1));
+        int texY = static_cast<int>((y + 1.0f) * 0.5f * (TEXTURE_HEIGHT - 1));
+        texX = min(max(texX, 0), TEXTURE_WIDTH - 1);
+        texY = min(max(texY, 0), TEXTURE_HEIGHT - 1);
+
+        float texValue = texture[texY * TEXTURE_WIDTH + texX];
+
+        int tileIdx = threadIdx.x % TILE_SIZE;
+        tile[tileIdx * 2] = x * texValue;
+        tile[tileIdx * 2 + 1] = y * texValue;
+
+        __syncthreads();
+
+        framebuffer[idx * 3 + 0] = tile[tileIdx * 2];
+        framebuffer[idx * 3 + 1] = tile[tileIdx * 2 + 1];
+        framebuffer[idx * 3 + 2] = texValue;
     }
 }
 
@@ -49,9 +83,7 @@ void checkHIPError(hipError_t err, const char* msg) {
 }
 
 int main(int argc, char* argv[]) {
-    // Parse command-line arguments
     int numFrames = (argc > 1) ? std::atoi(argv[1]) : DEFAULT_NUM_FRAMES;
-
     if (numFrames <= 0) {
         std::cerr << "Invalid number of frames. Must be a positive integer." << std::endl;
         return 1;
@@ -59,66 +91,88 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Processing " << numFrames << " frames with max " << MAX_CONCURRENT_FRAMES << " concurrent frames." << std::endl;
 
-    // Generate random vertex data
-    std::vector<float> hostVertexBuffer(NUM_VERTICES * 3);
-    for (int i = 0; i < NUM_VERTICES * 3; ++i) {
-        hostVertexBuffer[i] = static_cast<float>(rand()) / RAND_MAX;
+    // Generate vertex data
+    std::vector<float> hostVertexBuffer(NUM_VERTICES * 4);
+    std::default_random_engine generator;
+    std::uniform_real_distribution<float> vertexDist(-1.0f, 1.0f);
+    for (float& val : hostVertexBuffer) {
+        val = vertexDist(generator);
     }
 
-    // Mutex and condition variable for concurrency control
+    // Generate texture data
+    std::vector<float> hostTexture(TEXTURE_WIDTH * TEXTURE_HEIGHT);
+    std::uniform_real_distribution<float> textureDist(0.0f, 1.0f);
+    for (float& val : hostTexture) {
+        val = textureDist(generator);
+    }
+
+    // Allocate texture memory
+    float *texture;
+    checkHIPError(hipMalloc(&texture, TEXTURE_WIDTH * TEXTURE_HEIGHT * sizeof(float)), "Allocating texture");
+    checkHIPError(hipMemcpy(texture, hostTexture.data(), TEXTURE_WIDTH * TEXTURE_HEIGHT * sizeof(float), hipMemcpyHostToDevice), "Copying texture data");
+
+    // Concurrency control
     std::mutex mtx;
     std::condition_variable cv;
     int activeFrames = 0;
 
-    // Launch frames dynamically
+    // Launch frames
     for (int frame = 0; frame < numFrames; ++frame) {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&]() { return activeFrames < MAX_CONCURRENT_FRAMES; });
-        ++activeFrames;
-        lock.unlock();
+        {
+            std::unique_lock<std::mutex> lock(mtx);
+            cv.wait(lock, [&]() { return activeFrames < MAX_CONCURRENT_FRAMES; });
+            ++activeFrames;
+        }
 
-        std::thread([frame, &hostVertexBuffer, &mtx, &cv, &activeFrames]() {
-            float *vertexBuffer, *transformedVertexBuffer, *fragmentBuffer, *frameBuffer;
+        std::thread([frame, &mtx, &cv, &activeFrames, &hostVertexBuffer, texture]() {
+            float *vertexBuffer, *transformedVertexBuffer, *fragmentBuffer, *framebuffer;
             hipStream_t stream;
             hipStreamCreate(&stream);
 
-            // Allocate memory and copy data
-            checkHIPError(hipMalloc(&vertexBuffer, NUM_VERTICES * 3 * sizeof(float)), "Allocating vertex buffer");
-            checkHIPError(hipMalloc(&transformedVertexBuffer, NUM_VERTICES * 3 * sizeof(float)), "Allocating transformed vertex buffer");
-            checkHIPError(hipMalloc(&fragmentBuffer, NUM_FRAGMENTS * 2 * sizeof(float)), "Allocating fragment buffer");
-            checkHIPError(hipMalloc(&frameBuffer, NUM_FRAGMENTS * sizeof(float)), "Allocating frame buffer");
-            checkHIPError(hipMemcpy(vertexBuffer, hostVertexBuffer.data(), NUM_VERTICES * 3 * sizeof(float), hipMemcpyHostToDevice), "Copying vertex data");
+            // Allocate per-frame buffers
+            checkHIPError(hipMalloc(&vertexBuffer, NUM_VERTICES * 4 * sizeof(float)), "Allocating vertex buffer");
+            checkHIPError(hipMalloc(&transformedVertexBuffer, NUM_VERTICES * 4 * sizeof(float)), "Allocating transformed vertex buffer");
+            checkHIPError(hipMalloc(&fragmentBuffer, NUM_TRIANGLES * 2 * sizeof(float)), "Allocating fragment buffer");
+            checkHIPError(hipMalloc(&framebuffer, NUM_FRAGMENTS * 3 * sizeof(float)), "Allocating framebuffer");
 
-            // Launch pipeline
-            vertexShader<<<(NUM_VERTICES + 255) / 256, 256, 0, stream>>>(vertexBuffer, transformedVertexBuffer, NUM_VERTICES);
-            rasterizer<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, stream>>>(transformedVertexBuffer, fragmentBuffer, NUM_FRAGMENTS);
-            fragmentShader<<<(NUM_FRAGMENTS + 255) / 256, 256, 0, stream>>>(fragmentBuffer, frameBuffer, NUM_FRAGMENTS);
+            // Copy vertex data to the device
+            checkHIPError(hipMemcpy(vertexBuffer, hostVertexBuffer.data(), NUM_VERTICES * 4 * sizeof(float), hipMemcpyHostToDevice), "Copying vertex data");
 
+            // Launch vertex shader
+            hipLaunchKernelGGL(vertexShader, dim3((NUM_VERTICES + 255) / 256), dim3(256), 0, stream, vertexBuffer, transformedVertexBuffer, NUM_VERTICES);
+
+            // Launch rasterizer
+            hipLaunchKernelGGL(rasterizer, dim3((NUM_TRIANGLES + 255) / 256), dim3(256), 0, stream, transformedVertexBuffer, fragmentBuffer, NUM_TRIANGLES);
+
+            // Launch fragment shader
+            hipLaunchKernelGGL(fragmentShader, dim3((NUM_FRAGMENTS + 255) / 256), dim3(256), 0, stream, fragmentBuffer, texture, framebuffer, NUM_FRAGMENTS);
+
+            // Synchronize and clean up
             hipStreamSynchronize(stream);
-            std::cout << "Frame " << frame << " is ready, and currently " << activeFrames << " frames are being processed." << std::endl;
+            std::cout << "Frame " << frame << " processed." << std::endl;
 
-            // Cleanup
             hipFree(vertexBuffer);
             hipFree(transformedVertexBuffer);
             hipFree(fragmentBuffer);
-            hipFree(frameBuffer);
+            hipFree(framebuffer);
             hipStreamDestroy(stream);
 
-            // Update active frames count
-            std::unique_lock<std::mutex> lock(mtx);
-            --activeFrames;
-            lock.unlock();
+            {
+                std::unique_lock<std::mutex> lock(mtx);
+                --activeFrames;
+            }
             cv.notify_one();
         }).detach();
     }
 
-    // Wait for all threads to finish
+    // Wait for all frames to finish
     {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [&]() { return activeFrames == 0; });
     }
 
-    std::cout << "All frames processed." << std::endl;
+    hipFree(texture);
+    std::cout << "All frames processed successfully." << std::endl;
 
     return 0;
 }
